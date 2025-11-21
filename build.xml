@@ -70,4 +70,14 @@
     nbproject/build-impl.xml file. 
 
     -->
+    <target name="-post-compile">
+        <copy todir="${build.classes.dir}">
+            <fileset dir="${src.dir}" excludes="**/*.java, **/package.html, **/*.form"/>
+        </copy>
+    </target>
+    <target name="-post-compile-single">
+    <copy todir="${build.classes.dir}">
+        <fileset dir="${src.dir}" excludes="**/*.java, **/package.html, **/*.form"/>
+    </copy>
+</target>
 </project>
