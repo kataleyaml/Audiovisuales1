@@ -4,7 +4,14 @@
  */
 package vista;
 
-import vista.*;
+// 1. Importación del Modelo de datos (Activo)
+import modelo.Activo;
+// 2. Importaciones necesarias para la manipulación de datos en la tabla
+import java.util.List;
+import javax.swing.table.DefaultTableModel;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.text.SimpleDateFormat;
 
 /**
  *
@@ -110,7 +117,7 @@ public class Gestion_activos extends javax.swing.JFrame {
         });
         jScrollPane2.setViewportView(Tabla_activos);
 
-        scrollPane2.add(jScrollPane2);
+        scrollPane2.add(jScrollPane3);
 
         Tabla_activos1.setForeground(new java.awt.Color(255, 255, 255));
         Tabla_activos1.setModel(new javax.swing.table.DefaultTableModel(
@@ -134,7 +141,7 @@ public class Gestion_activos extends javax.swing.JFrame {
         });
         jScrollPane3.setViewportView(Tabla_activos1);
 
-        scrollPane2.add(jScrollPane3);
+        scrollPane2.add(jScrollPane4);
 
         Tabla_activos2.setForeground(new java.awt.Color(255, 255, 255));
         Tabla_activos2.setModel(new javax.swing.table.DefaultTableModel(
@@ -158,7 +165,7 @@ public class Gestion_activos extends javax.swing.JFrame {
         });
         jScrollPane4.setViewportView(Tabla_activos2);
 
-        scrollPane2.add(jScrollPane4);
+        scrollPane2.add(jScrollPane5);
 
         Tabla_activos3.setForeground(new java.awt.Color(255, 255, 255));
         Tabla_activos3.setModel(new javax.swing.table.DefaultTableModel(
@@ -182,7 +189,7 @@ public class Gestion_activos extends javax.swing.JFrame {
         });
         jScrollPane5.setViewportView(Tabla_activos3);
 
-        scrollPane2.add(jScrollPane5);
+        scrollPane2.add(jScrollPane6);
 
         Tabla_activos4.setForeground(new java.awt.Color(255, 255, 255));
         Tabla_activos4.setModel(new javax.swing.table.DefaultTableModel(
@@ -206,7 +213,7 @@ public class Gestion_activos extends javax.swing.JFrame {
         });
         jScrollPane6.setViewportView(Tabla_activos4);
 
-        scrollPane2.add(jScrollPane6);
+        scrollPane2.add(jScrollPane7);
 
         Tabla_activos5.setForeground(new java.awt.Color(255, 255, 255));
         Tabla_activos5.setModel(new javax.swing.table.DefaultTableModel(
@@ -230,7 +237,7 @@ public class Gestion_activos extends javax.swing.JFrame {
         });
         jScrollPane7.setViewportView(Tabla_activos5);
 
-        scrollPane2.add(jScrollPane7);
+        scrollPane2.add(jScrollPane8);
 
         Tabla_activos6.setForeground(new java.awt.Color(255, 255, 255));
         Tabla_activos6.setModel(new javax.swing.table.DefaultTableModel(
@@ -254,7 +261,7 @@ public class Gestion_activos extends javax.swing.JFrame {
         });
         jScrollPane8.setViewportView(Tabla_activos6);
 
-        scrollPane2.add(jScrollPane8);
+        scrollPane2.add(jScrollPane9);
 
         Tabla_activos7.setForeground(new java.awt.Color(255, 255, 255));
         Tabla_activos7.setModel(new javax.swing.table.DefaultTableModel(
@@ -278,7 +285,7 @@ public class Gestion_activos extends javax.swing.JFrame {
         });
         jScrollPane9.setViewportView(Tabla_activos7);
 
-        scrollPane2.add(jScrollPane9);
+        scrollPane2.add(jScrollPane10);
 
         Tabla_activos8.setForeground(new java.awt.Color(255, 255, 255));
         Tabla_activos8.setModel(new javax.swing.table.DefaultTableModel(
@@ -302,7 +309,7 @@ public class Gestion_activos extends javax.swing.JFrame {
         });
         jScrollPane10.setViewportView(Tabla_activos8);
 
-        scrollPane2.add(jScrollPane10);
+        scrollPane2.add(jScrollPane11);
 
         Tabla_activos9.setForeground(new java.awt.Color(255, 255, 255));
         Tabla_activos9.setModel(new javax.swing.table.DefaultTableModel(
@@ -325,8 +332,6 @@ public class Gestion_activos extends javax.swing.JFrame {
             }
         });
         jScrollPane11.setViewportView(Tabla_activos9);
-
-        scrollPane2.add(jScrollPane11);
 
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
@@ -370,7 +375,7 @@ public class Gestion_activos extends javax.swing.JFrame {
 
         jLabel9.setText("Observaciones");
 
-        jComboBox1.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
+        jComboBox1.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Disponible", "Prestado", "Dañado" }));
         jComboBox1.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jComboBox1ActionPerformed(evt);
@@ -380,6 +385,45 @@ public class Gestion_activos extends javax.swing.JFrame {
         jTextArea1.setColumns(20);
         jTextArea1.setRows(5);
         jScrollPane1.setViewportView(jTextArea1);
+
+        jButton1.setText("Nuevo");
+
+        jButton2.setText("Guardar");
+
+        jButton3.setText("Eliminar");
+
+        jButton4.setText("Cancelar");
+
+        javax.swing.GroupLayout jPanel3Layout = new javax.swing.GroupLayout(jPanel3);
+        jPanel3.setLayout(jPanel3Layout);
+        jPanel3Layout.setHorizontalGroup(
+            jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
+                .addGap(29, 29, 29)
+                .addComponent(jButton3)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 48, Short.MAX_VALUE)
+                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jButton4)
+                    .addComponent(jButton2))
+                .addGap(23, 23, 23))
+            .addGroup(jPanel3Layout.createSequentialGroup()
+                .addGap(16, 16, 16)
+                .addComponent(jButton1)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
+        jPanel3Layout.setVerticalGroup(
+            jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel3Layout.createSequentialGroup()
+                .addGap(32, 32, 32)
+                .addComponent(jButton2)
+                .addGap(23, 23, 23)
+                .addComponent(jButton1)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 285, Short.MAX_VALUE)
+                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jButton3)
+                    .addComponent(jButton4))
+                .addGap(224, 224, 224))
+        );
 
         javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
@@ -399,18 +443,19 @@ public class Gestion_activos extends javax.swing.JFrame {
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                         .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
                             .addComponent(jTextField1, javax.swing.GroupLayout.DEFAULT_SIZE, 160, Short.MAX_VALUE)
-                            .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                                .addComponent(jTextField2)
-                                .addComponent(jTextField3)
-                                .addComponent(jFormattedTextField1, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 132, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addComponent(jComboBox1, javax.swing.GroupLayout.Alignment.TRAILING, 0, 160, Short.MAX_VALUE)
-                                .addComponent(jTextField4, javax.swing.GroupLayout.Alignment.TRAILING)))
+                            .addComponent(jTextField2, javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jTextField3, javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jFormattedTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, 132, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(jComboBox1, 0, 160, Short.MAX_VALUE)
+                            .addComponent(jTextField4))
                         .addGap(18, 18, 18))
                     .addGroup(jPanel2Layout.createSequentialGroup()
                         .addComponent(jLabel9)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 44, Short.MAX_VALUE)
                         .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 309, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addContainerGap())))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)))
+                .addGap(24, 24, 24)
+                .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -450,47 +495,11 @@ public class Gestion_activos extends javax.swing.JFrame {
                     .addGroup(jPanel2Layout.createSequentialGroup()
                         .addGap(39, 39, 39)
                         .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 124, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                .addContainerGap(200, Short.MAX_VALUE))
-        );
-
-        jButton1.setText("Nuevo");
-
-        jButton2.setText("Guardar");
-
-        jButton3.setText("Eliminar");
-
-        jButton4.setText("Cancelar");
-
-        javax.swing.GroupLayout jPanel3Layout = new javax.swing.GroupLayout(jPanel3);
-        jPanel3.setLayout(jPanel3Layout);
-        jPanel3Layout.setHorizontalGroup(
-            jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
-                .addGap(29, 29, 29)
-                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jButton1)
-                    .addComponent(jButton3))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 48, Short.MAX_VALUE)
-                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jButton4)
-                    .addComponent(jButton2))
-                .addGap(23, 23, 23))
-        );
-        jPanel3Layout.setVerticalGroup(
-            jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel3Layout.createSequentialGroup()
-                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(jPanel3Layout.createSequentialGroup()
-                        .addGap(32, 32, 32)
-                        .addComponent(jButton2))
-                    .addGroup(jPanel3Layout.createSequentialGroup()
-                        .addGap(21, 21, 21)
-                        .addComponent(jButton1)))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 331, Short.MAX_VALUE)
-                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jButton3)
-                    .addComponent(jButton4))
-                .addGap(224, 224, 224))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel2Layout.createSequentialGroup()
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap())
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -501,8 +510,6 @@ public class Gestion_activos extends javax.swing.JFrame {
                 .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                 .addGap(0, 0, Short.MAX_VALUE)
@@ -515,9 +522,7 @@ public class Gestion_activos extends javax.swing.JFrame {
                 .addComponent(jLabel1, javax.swing.GroupLayout.PREFERRED_SIZE, 39, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
                         .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addContainerGap())))
@@ -553,7 +558,32 @@ public class Gestion_activos extends javax.swing.JFrame {
 
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(() -> new Gestion_activos().setVisible(true));
+        
     }
+    public void cargarTabla(List<Activo> listaActivos) {
+    // Obtenemos el modelo de la tabla para manipular sus filas
+    DefaultTableModel modelo = (DefaultTableModel) Tabla_activos.getModel();
+    
+    // 1. Limpiar filas existentes (fundamental para la búsqueda y recarga)
+    modelo.setRowCount(0);
+
+    // 2. Llenar la tabla con los nuevos datos
+    for (Activo activo : listaActivos) {
+        // Creamos un array de Object con 7 elementos (coincidiendo con las columnas de tu tabla)
+        Object[] fila = new Object[7]; 
+        
+        // Mapeamos los atributos del objeto Activo a las columnas de la tabla
+        fila[0] = activo.getIdEquipo();
+        fila[1] = activo.getNombre();
+        fila[2] = activo.getMarca();
+        fila[3] = activo.getModeloSerie();
+        fila[4] = activo.getUbicacionActual(); // Ubicacion_actual
+        fila[5] = activo.getEstado();
+        fila[6] = activo.getFechaAdquisicion(); // Fecha_adquisicion (Java Date)
+        
+        modelo.addRow(fila);
+    }
+}
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JTable Tabla_activos;
