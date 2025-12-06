@@ -1,37 +1,37 @@
 package Controlador;
 
+import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 import javax.persistence.PersistenceException;
+import javax.persistence.TypedQuery;
+import javax.persistence.NoResultException;
 import modelo.Usuario;
+
+// Asumo que tienes una clase UsuarioJpaController en el paquete Controlador o en otro paquete.
+// Si está en otro paquete, asegúrate de importarla correctamente.
+// import Controlador.UsuarioJpaController; 
 
 public class controlador_login {
 
-    // 1. Instancia del controlador JPA (ya no es 'final' y se inicializa a null)
-    // Se asume que UsuarioJpaController ya fue creado en este paquete
-    private UsuarioJpaController usuarioJpaController = null;
+    private EntityManagerFactory emf = null;
+    private boolean conexionExitosa = true;
     
-    // 2. Nueva bandera para el estado de la conexión, inicializada a true
-    private boolean conexionExitosa = true; 
+    // Nombre de la unidad de persistencia (Debe coincidir con persistence.xml)
+    private static final String UNIDAD_PERSISTENCIA = "Audiovisuales1PU";
     
-    // Nombre de tu unidad de persistencia (Verificado en persistence.xml: Audiovisaules1PU)
-    private static final String UNIDAD_PERSISTENCIA = "Audiovisaules1PU";
-
     /**
-     * Constructor: Inicializa la fábrica de entidades (EMF) y el controlador JPA.
-     * Añade manejo de excepciones de conexión.
+     * Constructor: Inicializa la fábrica de entidades (EMF) y maneja excepciones.
      */
     public controlador_login() {
         try {
             // Intenta crear la conexión a la BD
-            EntityManagerFactory emf = Persistence.createEntityManagerFactory(UNIDAD_PERSISTENCIA);
-            this.usuarioJpaController = new UsuarioJpaController(emf);
-            this.conexionExitosa = true; // Conexión exitosa
+            this.emf = Persistence.createEntityManagerFactory(UNIDAD_PERSISTENCIA);
+            this.conexionExitosa = true; 
         } catch (PersistenceException e) {
-            // Si la conexión falla (BD no activa o inaccesible)
+            // Manejo de la excepción de conexión
             System.err.println("❌ ERROR DE CONEXIÓN A LA BASE DE DATOS: " + e.getMessage());
-            this.usuarioJpaController = null; // Se mantiene o se asigna null
-            this.conexionExitosa = false; // Conexión fallida
+            this.conexionExitosa = false;
         }
     }
 
@@ -43,19 +43,44 @@ public class controlador_login {
     }
 
     /**
-     * Intenta autenticar a un usuario usando nombre y contraseña.
-     * Verifica primero el estado de la conexión.
-     * @param nombre El nombre de usuario ingresado.
+     * Autentica a un usuario usando ID (numérico) y contraseña (String).
+     * Utilizamos el NamedQuery "Usuario.autenticar" que definimos en la entidad Usuario.
+     * @param idUsuario El ID/nombre de usuario ingresado (numérico, long).
      * @param contrasena La contraseña ingresada.
      * @return El objeto Usuario si la autenticación es exitosa, o null si falla.
      */
-    public Usuario autenticarUsuario(String nombre, String contrasena) {
-        if (!conexionExitosa || usuarioJpaController == null) {
-            // Si la conexión falló en el constructor, no intentes buscar.
-            return null; 
+    public Usuario autenticarUsuario(long idUsuario, String contrasena) {
+        if (!conexionExitosa || emf == null) {
+            return null; // No intentes buscar si la conexión falló
         }
         
-        // La lógica de búsqueda real está en UsuarioJpaController
-        return usuarioJpaController.buscarUsuarioPorCredenciales(nombre, contrasena);
+        EntityManager em = emf.createEntityManager();
+        Usuario usuario = null;
+        
+        try {
+            // Usamos el NamedQuery "Usuario.autenticar"
+            TypedQuery<Usuario> query = em.createNamedQuery("Usuario.autenticar", Usuario.class);
+            query.setParameter("idUsuario", idUsuario);
+            query.setParameter("pass", contrasena); // El parámetro se llama :pass en el NamedQuery
+            
+            usuario = query.getSingleResult();
+            
+        } catch (NoResultException e) {
+            usuario = null; // No se encontró usuario con esas credenciales
+        } catch (Exception e) {
+            System.err.println("Error al autenticar usuario: " + e.getMessage());
+            usuario = null;
+        } finally {
+            if (em != null && em.isOpen()) {
+                em.close();
+            }
+        }
+        return usuario;
     }
+    
+    // Método obsoleto: Eliminado o mantenido como marcador
+    // public Usuario autenticarUsuario(String nombre, String contrasena) {
+    //     // Ya no es necesario si solo usamos el método con 'long idUsuario'
+    //     return null; 
+    // }
 }

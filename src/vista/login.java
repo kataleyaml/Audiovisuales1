@@ -42,7 +42,7 @@ public class login extends javax.swing.JFrame {
         jLabel2 = new javax.swing.JLabel();
         jPanel1 = new javax.swing.JPanel();
         jPasswordField1 = new javax.swing.JPasswordField();
-        jTextField1 = new javax.swing.JTextField();
+        nombreUsuario = new javax.swing.JTextField();
         jButton1 = new javax.swing.JButton();
         jLabel4 = new javax.swing.JLabel();
         jLabel5 = new javax.swing.JLabel();
@@ -64,9 +64,9 @@ public class login extends javax.swing.JFrame {
             }
         });
 
-        jTextField1.addActionListener(new java.awt.event.ActionListener() {
+        nombreUsuario.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jTextField1ActionPerformed(evt);
+                nombreUsuarioActionPerformed(evt);
             }
         });
 
@@ -90,14 +90,14 @@ public class login extends javax.swing.JFrame {
                     .addComponent(jButton1, javax.swing.GroupLayout.PREFERRED_SIZE, 149, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
                         .addComponent(jPasswordField1, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, 149, Short.MAX_VALUE)
-                        .addComponent(jTextField1, javax.swing.GroupLayout.Alignment.LEADING)))
+                        .addComponent(nombreUsuario, javax.swing.GroupLayout.Alignment.LEADING)))
                 .addContainerGap(36, Short.MAX_VALUE))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
                 .addGap(49, 49, 49)
-                .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(nombreUsuario, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 45, Short.MAX_VALUE)
                 .addComponent(jPasswordField1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(39, 39, 39)
@@ -134,44 +134,53 @@ public class login extends javax.swing.JFrame {
         // TODO add your handling code here:
     }//GEN-LAST:event_jPasswordField1ActionPerformed
 
-    private void jTextField1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextField1ActionPerformed
+    private void nombreUsuarioActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_nombreUsuarioActionPerformed
         // TODO add your handling code here:
-    }//GEN-LAST:event_jTextField1ActionPerformed
+    }//GEN-LAST:event_nombreUsuarioActionPerformed
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-        String nombre = jTextField1.getText();
+       String idUsuarioTexto = nombreUsuario.getText();
     String contrasena = new String(jPasswordField1.getPassword());
 
-    // 2. Inicializar el Controlador de Login
-    controlador_login controlador = new controlador_login();
-    
-    // --- NUEVO PASO DE VERIFICACIÓN DE CONEXIÓN ---
-    if (!controlador.isConexionExitosa()) {
-        JOptionPane.showMessageDialog(this, 
-            "No se pudo conectar a la base de datos. Verifique que el servidor MySQL esté activo.", 
-            "Error de Conexión a BD", 
+    long idUsuario;
+    try {
+        idUsuario = Long.parseLong(idUsuarioTexto);
+    } catch (NumberFormatException e) {
+        JOptionPane.showMessageDialog(this,
+            "El ID de Usuario debe ser numérico.",
+            "Error de Formato",
             JOptionPane.ERROR_MESSAGE);
-        return; // Detiene el proceso si no hay conexión
+        return;
     }
-    // ---------------------------------------------
 
-    // 3. Autenticar, usando el controlador para acceder a la BD
-    Usuario usuario = controlador.autenticarUsuario(nombre, contrasena);
+    controlador_login controlador = new controlador_login();
+
+    if (!controlador.isConexionExitosa()) {
+        JOptionPane.showMessageDialog(this,
+            "No se pudo conectar a la base de datos. Verifique que el servidor MySQL esté activo.",
+            "Error de Conexión a BD",
+            JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    Usuario usuario = controlador.autenticarUsuario(idUsuario, contrasena);
 
     if (usuario != null) {
         // CREDENCIALES VÁLIDAS
-        JOptionPane.showMessageDialog(this, "¡Bienvenido, " + usuario.getNombre() + "!");
+        String nombreCompleto = usuario.getNombreCompleto(); // 🚨 ASUMO que tienes este método en tu clase Usuario
 
-        // 4. Abrir la ventana Principal y cerrar el Login
-        Principal principalView = new Principal();
+        JOptionPane.showMessageDialog(this, "¡Bienvenido, " + nombreCompleto + "!");
+
+        // 4. Abrir la ventana Principal y pasar el nombre del usuario 🚩
+        Principal principalView = new Principal(nombreCompleto); // <-- ¡CORREGIDO!
         principalView.setVisible(true);
         this.dispose(); // Cierra la ventana de login
 
     } else {
-        // Si el usuario es null, puede ser por credenciales incorrectas o por la BD inaccesible (pero esto ya lo capturamos arriba)
-        JOptionPane.showMessageDialog(this, 
-            "Credenciales incorrectas o usuario no encontrado.", 
-            "Error de Login", 
+        // ... (Mensaje de error)
+        JOptionPane.showMessageDialog(this,
+            "Credenciales incorrectas o usuario no encontrado.",
+            "Error de Login",
             JOptionPane.ERROR_MESSAGE);
     }
     }//GEN-LAST:event_jButton1ActionPerformed
@@ -209,6 +218,6 @@ public class login extends javax.swing.JFrame {
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPasswordField jPasswordField1;
-    private javax.swing.JTextField jTextField1;
+    private javax.swing.JTextField nombreUsuario;
     // End of variables declaration//GEN-END:variables
 }

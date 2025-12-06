@@ -1,21 +1,11 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package Controlador;
-
-/**
- *
- * @author ADONYZZZ
- */
-
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Query;
-import javax.persistence.NoResultException;
 import java.util.List;
-
+import modelo.Equipos; // Usar la entidad correcta
+import javax.persistence.NoResultException;
 
 public class ActivosJpaController {
 
@@ -30,91 +20,110 @@ public class ActivosJpaController {
     }
 
     // ===========================
-    //  MÉTODO GUARDAR (CREATE)
+    // MÉTODO CREAR (CREATE)
     // ===========================
-    public void crear(Activos activo) {
+    public Integer crear(Equipos equipo) { 
         EntityManager em = getEntityManager();
         try {
             em.getTransaction().begin();
-            em.persist(activo);
+            em.persist(equipo); 
             em.getTransaction().commit();
+            return equipo.getIDEquipo(); 
+            
         } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            em.close();
-        }
-    }
-
-    // ===========================
-    //  MÉTODO EDITAR (UPDATE)
-    // ===========================
-    public void editar(Activos activo) {
-        EntityManager em = getEntityManager();
-        try {
-            em.getTransaction().begin();
-            em.merge(activo);
-            em.getTransaction().commit();
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            em.close();
-        }
-    }
-
-    // ===========================
-    //  MÉTODO ELIMINAR
-    // ===========================
-    public void eliminar(int id) {
-        EntityManager em = getEntityManager();
-        try {
-            em.getTransaction().begin();
-            Activos a = em.find(Activos.class, id);
-            if (a != null) {
-                em.remove(a);
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
             }
-            em.getTransaction().commit();
-        } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error al guardar el equipo: " + e.getMessage(), e);
         } finally {
             em.close();
         }
     }
-
+    
     // ===========================
-    //  BUSCAR POR ID
+    // MÉTODO LISTAR TODOS (findEquiposEntities)
     // ===========================
-    public Activos buscarPorId(int id) {
+    public List<Equipos> findEquiposEntities() {
         EntityManager em = getEntityManager();
         try {
-            return em.find(Activos.class, id);
-        } finally {
-            em.close();
-        }
-    }
-
-    // ===========================
-    //  LISTAR TODOS
-    // ===========================
-    public List<Activos> listarTodos() {
-        EntityManager em = getEntityManager();
-        try {
-            Query q = em.createQuery("SELECT a FROM Activos a");
+            Query q = em.createQuery("SELECT e FROM Equipos e");
             return q.getResultList();
         } finally {
             em.close();
         }
     }
-
+    
     // ===========================
-    //  BUSCAR POR TEXTO (NOMBRE, MARCA, MODELO)
+    // MÉTODO BUSCAR POR ID (findEquipos)
+    // CORRECCIÓN CLAVE: La firma del método ahora acepta Integer, haciendo el JpaController
+    // consistente con la clave primaria de la entidad Equipos.
     // ===========================
-    public List<Activos> buscarPorTexto(String texto) {
+    public Equipos findEquipos(Integer id) { // <-- ¡CORREGIDO! De Long a Integer
         EntityManager em = getEntityManager();
         try {
-            Query q = em.createQuery("SELECT a FROM Activos a WHERE "
-                    + "LOWER(a.nombre) LIKE :txt OR "
-                    + "LOWER(a.marca) LIKE :txt OR "
-                    + "LOWER(a.modelo) LIKE :txt");
+            // El EntityManager.find() ahora recibe el tipo de clave correcto (Integer)
+            return em.find(Equipos.class, id); 
+        } finally {
+            em.close(); 
+        }
+    }
+    
+
+    // ===========================
+    // MÉTODO EDITAR (EDIT)
+    // ===========================
+    public void edit(Equipos equipo) throws Exception { 
+        EntityManager em = getEntityManager();
+        try {
+            em.getTransaction().begin();
+            em.merge(equipo);
+            em.getTransaction().commit();
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            throw e; 
+        } finally {
+            em.close();
+        }
+    }
+
+    // ===========================
+    // MÉTODO ELIMINAR (DESTROY)
+    // ===========================
+    public void destroy(Integer id) throws Exception { 
+        EntityManager em = getEntityManager();
+        try {
+            em.getTransaction().begin();
+            
+            Equipos equipo = em.find(Equipos.class, id); 
+            
+            if (equipo == null) {
+                throw new NoResultException("El equipo con ID " + id + " no existe.");
+            }
+            
+            em.remove(equipo);
+            em.getTransaction().commit();
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            throw e; 
+        } finally {
+            em.close();
+        }
+    }
+    
+    // ===========================
+    // BUSCAR POR TEXTO 
+    // ===========================
+    public List<Equipos> buscarPorTexto(String texto) {
+        EntityManager em = getEntityManager();
+        try {
+            Query q = em.createQuery("SELECT e FROM Equipos e WHERE "
+                                     + "LOWER(e.nombre) LIKE :txt OR "
+                                     + "LOWER(e.marca) LIKE :txt OR "
+                                     + "LOWER(e.modeloSerie) LIKE :txt");
 
             q.setParameter("txt", "%" + texto.toLowerCase() + "%");
 
@@ -123,10 +132,26 @@ public class ActivosJpaController {
             em.close();
         }
     }
-
-    private static class Activos {
-
-        public Activos() {
-        }
+    public List<Equipos> buscarPorCriterio(String textoBusqueda) {
+    EntityManager em = getEntityManager();
+    try {
+        String patron = "%" + textoBusqueda.toLowerCase() + "%";
+        
+        // La sintaxis 'CAST(... AS string)' causa el error en MariaDB/MySQL.
+        // Usamos CONCAT para convertir implícitamente el ID a String.
+        Query q = em.createQuery("SELECT e FROM Equipos e WHERE " +
+                "LOWER(e.nombre) LIKE :texto OR " +
+                "LOWER(e.marca) LIKE :texto OR " +
+                "LOWER(e.modeloSerie) LIKE :texto OR " +
+                "LOWER(e.ubicacionactual) LIKE :texto OR " +
+                // 🚨 CORRECCIÓN CLAVE: Usamos CONCAT para convertir ID_Equipo a String para el LIKE
+                "CONCAT(e.iDEquipo, '') LIKE :texto"); 
+        
+        q.setParameter("texto", patron);
+        return q.getResultList();
+    } finally {
+        em.close();
     }
+    }
+    
 }

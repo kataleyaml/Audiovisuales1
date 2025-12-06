@@ -1,17 +1,16 @@
 package modelo;
 
-import java.util.Date; 
+import java.util.Date;
 // Importamos java.util.Date para manejar la fecha de adquisición.
-// (En la capa DAO, tendrás que manejar la conversión a java.sql.Date si usas JDBC).
 
 /**
  * Clase de Entidad/Modelo que representa un Activo o Equipo audiovisual 
  * en el inventario.
  */
 public class Activo {
-    
+
     // --- ATRIBUTOS (Variables de Instancia) ---
-    private Long idEquipo; 
+    private Long idEquipo;
     private String nombre; // Ej: Video Beam, Micrófono, Cable HDMI
     private String marca; // Ej: Sony, Epson
     private String modeloSerie;
