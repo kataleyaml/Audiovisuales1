@@ -28,6 +28,9 @@ import javax.persistence.Table;
 })
 public class Usuario implements Serializable {
 
+    @OneToMany(cascade = CascadeType.ALL, mappedBy = "iDMonitor")
+    private Collection<Prestamo> prestamoCollection;
+
     private static final long serialVersionUID = 1L;
     
     // --- Mapeo de campos de Login ---
@@ -146,5 +149,13 @@ public class Usuario implements Serializable {
         System.err.println("Advertencia: Se intentó asignar un login no numérico.");
         // Opcional: Asignar un valor por defecto o lanzar una excepción para la vista
     }
+    }
+
+    public Collection<Prestamo> getPrestamoCollection() {
+        return prestamoCollection;
+    }
+
+    public void setPrestamoCollection(Collection<Prestamo> prestamoCollection) {
+        this.prestamoCollection = prestamoCollection;
     }
 }

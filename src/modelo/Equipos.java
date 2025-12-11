@@ -1,8 +1,10 @@
 package modelo;
 
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.Date;
 import javax.persistence.Basic;
+import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
@@ -10,6 +12,7 @@ import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
+import javax.persistence.OneToMany;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
@@ -30,6 +33,9 @@ import javax.persistence.TemporalType;
     @NamedQuery(name = "Equipos.findByEstado", query = "SELECT e FROM Equipos e WHERE e.estado = :estado"),
     @NamedQuery(name = "Equipos.findByUbicacionactual", query = "SELECT e FROM Equipos e WHERE e.ubicacionactual = :ubicacionactual")})
 public class Equipos implements Serializable {
+
+    @OneToMany(cascade = CascadeType.ALL, mappedBy = "equipos")
+    private Collection<DetallePrestamo> detallePrestamoCollection;
 
     private static final long serialVersionUID = 1L;
     @Id
@@ -166,5 +172,13 @@ public class Equipos implements Serializable {
     @Override
     public String toString() {
         return "modelo.Equipos[ iDEquipo=" + iDEquipo + " ]";
+    }
+
+    public Collection<DetallePrestamo> getDetallePrestamoCollection() {
+        return detallePrestamoCollection;
+    }
+
+    public void setDetallePrestamoCollection(Collection<DetallePrestamo> detallePrestamoCollection) {
+        this.detallePrestamoCollection = detallePrestamoCollection;
     }
 }

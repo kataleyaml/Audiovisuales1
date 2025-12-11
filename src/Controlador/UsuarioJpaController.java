@@ -22,33 +22,41 @@ public class UsuarioJpaController implements Serializable {
     }
 
     // =========================================================
-    // 🚨 CORRECCIÓN CLAVE: BÚSQUEDA POR NOMBRE/LOGIN
-    // (Maneja la conversión de String a long)
+    // MÉTODOS DE AUTENTICACIÓN (CORREGIDO PARA USAR NAMEDQUERY)
     // =========================================================
 
     /**
-     * Busca un Usuario existente por su nombre de login (asumido como tipo long).
+     * Autentica un usuario usando la NamedQuery "Usuario.autenticar".
+     * Recibe la entrada del login (String) y la convierte a long para la consulta.
+     * @param nombreUsuarioLogin El ID de usuario (String) introducido en el login.
+     * @param contrasena La contraseña introducida en el login.
+     * @return El objeto Usuario si las credenciales son correctas, o null si no lo son.
      */
-    public Usuario findUsuarioByNombreUsuario(String nombreUsuario) {
+    public Usuario autenticarUsuario(String nombreUsuarioLogin, String contrasena) {
         EntityManager em = getEntityManager();
         try {
-            // 1. Intentar convertir el String de entrada a LONG
-            long idUsuarioLong = Long.parseLong(nombreUsuario); 
-
-            // 2. Ejecutar la JPQL con el valor LONG
-            Query q = em.createQuery("SELECT u FROM Usuario u WHERE u.nombreUsuario = :nombreUsuario");
-            q.setParameter("nombreUsuario", idUsuarioLong); 
+            // 1. Convertir la entrada del login (String) a long
+            long idUsuarioLong = Long.parseLong(nombreUsuarioLogin);
             
+            // 2. Ejecutar la CONSULTA NOMBRADA EXACTA definida en la entidad Usuario.java
+            // NamedQuery: "Usuario.autenticar"
+            Query q = em.createNamedQuery("Usuario.autenticar"); 
+
+            // 3. Establecer parámetros con los nombres exactos de la NamedQuery: :idUsuario y :pass
+            q.setParameter("idUsuario", idUsuarioLong); 
+            q.setParameter("pass", contrasena);
+
+            // 4. Obtener el resultado
             return (Usuario) q.getSingleResult();
         } catch (NumberFormatException e) {
-            // Si el String no es un número válido (ej: "Juan"), atrapa el error
-            System.err.println("Error de formato: El nombre de usuario no es un número válido (long).");
-            return null; 
+            // Error si el usuario introduce letras en el campo de login numérico
+            System.err.println("Error de formato en login: El ID de usuario no es un número válido.");
+            return null;
         } catch (NoResultException e) {
-            // Si no lo encuentra, retorna null
+            // Credenciales incorrectas, no se encontró resultado
             return null;
         } catch (Exception e) {
-            System.err.println("Error al buscar Usuario por nombre: " + e.getMessage());
+            System.err.println("Error fatal en autenticación: " + e.getMessage());
             return null;
         } finally {
             if (em != null) {
@@ -56,9 +64,47 @@ public class UsuarioJpaController implements Serializable {
             }
         }
     }
+
+    // =========================================================
+    // MÉTODO BÚSQUEDA POR NOMBRE/LOGIN (Mantenido y Corregido para LONG)
+    // Se usa JPQL directa, no NamedQuery.
+    // =========================================================
+
+    /**
+     * Busca un Usuario existente por su nombre de login (asumido como tipo long).
+     */
+    public Usuario findUsuarioByNombreUsuario(String nombreUsuario) {
+    EntityManager em = getEntityManager();
+    try {
+        // 1. Convertir el String de entrada a LONG para satisfacer el mapeo de la entidad Usuario.
+        // Si la entidad mapea 'nombreUsuario' como Long, debemos pasar un Long.
+        long idUsuarioLong = Long.parseLong(nombreUsuario); 
+        
+        // 2. Ejecutar la JPQL.
+        // Usamos la variable long en el parámetro
+        Query q = em.createQuery("SELECT u FROM Usuario u WHERE u.nombreUsuario = :nombreUsuario");
+        q.setParameter("nombreUsuario", idUsuarioLong); 
+        
+        return (Usuario) q.getSingleResult();
+    } catch (NumberFormatException e) {
+        // Esto captura si el String "nombreUsuario" no se pudo convertir a Long.
+        System.err.println("Error de formato: El nombre de usuario no es un número válido (long).");
+        return null; 
+    } catch (NoResultException e) {
+        // No se encontró el usuario
+        return null;
+    } catch (Exception e) {
+        System.err.println("Error al buscar Usuario por nombre/código (" + nombreUsuario + "): " + e.getMessage());
+        return null;
+    } finally {
+        if (em != null) {
+            em.close();
+        }
+    }
+}
     
     // =========================================================
-    // 🚨 CORRECCIÓN CLAVE: MÉTODOS CRUD ESTÁNDAR (Elimina "Not supported yet")
+    // MÉTODOS CRUD ESTÁNDAR (create, edit, destroy, findUsuario)
     // =========================================================
 
     public void create(Usuario usuario) throws Exception {
@@ -66,11 +112,10 @@ public class UsuarioJpaController implements Serializable {
         try {
             em = getEntityManager();
             em.getTransaction().begin();
-            // Manejo de la relación con Rol
             if (usuario.getRolId() != null) {
                 usuario.setRolId(em.getReference(usuario.getRolId().getClass(), usuario.getRolId().getId()));
             }
-            em.persist(usuario); // 🚨 IMPLEMENTACIÓN CORRECTA
+            em.persist(usuario);
             em.getTransaction().commit();
         } catch (Exception ex) {
             if (em != null && em.getTransaction().isActive()) {
@@ -89,7 +134,7 @@ public class UsuarioJpaController implements Serializable {
         try {
             em = getEntityManager();
             em.getTransaction().begin();
-            usuario = em.merge(usuario); // 🚨 IMPLEMENTACIÓN CORRECTA
+            usuario = em.merge(usuario);
             em.getTransaction().commit();
         } catch (Exception ex) {
             if (em != null && em.getTransaction().isActive()) {
@@ -128,16 +173,25 @@ public class UsuarioJpaController implements Serializable {
         }
     }
     
+    public Usuario findUsuario(Integer id) {
+        EntityManager em = getEntityManager();
+        try {
+            return em.find(Usuario.class, id);
+        } finally {
+            if (em != null) {
+                em.close();
+            }
+        }
+    }
+
     // =========================================================
-    // MÉTODOS DE CONSULTA Y LISTADO (Mantenidos)
+    // MÉTODOS DE CONSULTA Y LISTADO (findUsuarioEntities)
     // =========================================================
 
-    // Método auxiliar para obtener la lista de todas las entidades
     public List<Usuario> findUsuarioEntities() {
         return findUsuarioEntities(true, -1, -1);
     }
 
-    // Método que implementa la lógica de la Criteria Query
     public List<Usuario> findUsuarioEntities(boolean all, int maxResults, int firstResult) {
         EntityManager em = getEntityManager();
         try {
@@ -151,41 +205,6 @@ public class UsuarioJpaController implements Serializable {
                 q.setFirstResult(firstResult);
             }
             return q.getResultList();
-        } finally {
-            if (em != null) {
-                em.close();
-            }
-        }
-    }
-    
-    // Método para buscar por ID
-    public Usuario findUsuario(Integer id) {
-        EntityManager em = getEntityManager();
-        try {
-            return em.find(Usuario.class, id);
-        } finally {
-            if (em != null) {
-                em.close();
-            }
-        }
-    }
-    
-    // Método de autenticación
-    public Usuario buscarUsuarioPorCredenciales(long idUsuario, String contrasena) {
-        EntityManager em = getEntityManager();
-        try {
-            Query q = em.createQuery(
-                "SELECT u FROM Usuario u WHERE u.nombreUsuario = :idUsuario AND u.contrasena = :pass");
-            
-            q.setParameter("idUsuario", idUsuario);
-            q.setParameter("pass", contrasena);
-            
-            return (Usuario) q.getSingleResult();
-        } catch (NoResultException e) {
-            return null;
-        } catch (Exception e) {
-            System.err.println("Error en autenticación: " + e.getMessage());
-            return null;
         } finally {
             if (em != null) {
                 em.close();

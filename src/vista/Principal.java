@@ -3,7 +3,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JFrame.java to edit this template
  */
 package vista;
-import Controlador.ActivosJpaController;
+import Controlador.EquiposJpaController;
 import Controlador.Controlador_Principal;
 import java.awt.Color;
 import java.awt.event.MouseAdapter;
@@ -12,6 +12,7 @@ import java.util.List;
 import modelo.Activo;
 import javax.swing.table.DefaultTableModel;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import javax.swing.JOptionPane;
 import java.util.Date;
 import javax.persistence.Persistence;
@@ -19,6 +20,8 @@ import modelo.Equipos;
 import java.util.Date; 
 import javax.swing.SpinnerDateModel;
 import modelo.Usuario;
+import modelo.Prestamo;         // <--- AGREGAR ESTA LÍNEA
+import modelo.DetallePrestamo;
 /**
  *
  * @author Jose
@@ -27,9 +30,37 @@ public class Principal extends javax.swing.JFrame {
     
     private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(Principal.class.getName());
     
-    private Controlador_Principal controlador;
+
     private int indicePestanaAnterior;
-    
+    // Atributo global para manejar la lista temporal de equipos a prestar
+    private Controlador_Principal controladorPrincipal;
+    private DefaultTableModel modeloDetallePrestamo;
+
+    // Atributo global para almacenar los objetos Equipos disponibles
+    private List<modelo.Equipos> equiposDisponibles;
+    private List<Integer> obtenerIDsEquiposDeDetalle() {
+        List<Integer> idsEquipos = new ArrayList<>();
+        DefaultTableModel modelo = (DefaultTableModel) jTableDetalle_Prestamo.getModel();
+        
+        // El ID del equipo es la columna 1, según la configuración de configurarTablaDetallePrestamo
+        final int COLUMNA_ID_EQUIPO = 1; 
+
+        for (int i = 0; i < modelo.getRowCount(); i++) {
+            try {
+                // Obtener el valor de la columna 1 (ID activo)
+                Object idObj = modelo.getValueAt(i, COLUMNA_ID_EQUIPO);
+                if (idObj != null) {
+                    // Convertir el ID a Integer (puede ser Long si así lo mapeaste, 
+                    // pero Integer es más común para PK en Java si es IDENTITY/auto-incremental)
+                    idsEquipos.add(Integer.parseInt(idObj.toString()));
+                }
+            } catch (NumberFormatException e) {
+                logger.severe("Error al convertir ID de equipo a número en la fila " + i + ": " + e.getMessage());
+                // Puedes optar por saltar o lanzar una excepción aquí.
+            }
+        }
+        return idsEquipos;
+    }
     private void limpiarCampos() {
     // 🚩 PASO CLAVE: Deseleccionar cualquier fila en la tabla
     Tabla_activos.clearSelection(); 
@@ -73,10 +104,60 @@ public class Principal extends javax.swing.JFrame {
         modelo.addRow(fila);
     }
  }
+    private void cargarDetallePrestamos() {
+    // Asegurarse de que el modelo exista y que el controlador principal esté disponible
+    if (modeloDetallePrestamo == null || controladorPrincipal == null) {
+        System.err.println("Error: Modelo de tabla o Controlador Principal no inicializado.");
+        return;
+    }
+    
+    // 1. Limpiar la tabla antes de cargar nuevos datos
+    modeloDetallePrestamo.setRowCount(0);
+    
+    // 2. Obtener la lista de Préstamos (con sus detalles ya cargados)
+    List<Prestamo> listaPrestamos = controladorPrincipal.obtenerTodosLosPrestamosConDetalles();
+    
+    if (listaPrestamos.isEmpty()) {
+        System.out.println("No se encontraron préstamos en la base de datos.");
+        return;
+    }
+    
+    // 3. Iterar sobre cada Prestamo y luego sobre sus DetallePrestamo
+    for (Prestamo prestamo : listaPrestamos) {
+        // La colección DetallePrestamoCollection se trae gracias al JOIN FETCH
+        if (prestamo.getDetallePrestamoCollection() != null) {
+            
+            for (DetallePrestamo detalle : prestamo.getDetallePrestamoCollection()) {
+                
+                // Mapeo de la fila según las 13 columnas que definiste en configurarTablaDetallePrestamo()
+                Object[] fila = new Object[]{
+                    // 1. Datos de DetallePrestamo (PK e Metadata del Equipo)
+                    prestamo.getIDPrestamo(), // ID Préstamo
+                    detalle.getDetallePrestamoPK().getID_Activo(), // ID activo
+                    detalle.getNombreEquipo(), // Nombre Equipo
+                    detalle.getMarca(), // Marca
+                    detalle.getModeloSerie(), // Modelo/serie
+                    
+                    // 2. Datos del Prestamo (Cabecera)
+                    prestamo.getIDMonitor().getNombreUsuario(), // ID Administrador/Monitor (usando el código/nombre de usuario)
+                    prestamo.getFechaPrestamo(), // Fecha de Préstamo
+                    prestamo.getFechaDevolucionEstimada(), // Fecha de Devolución Estimada
+                    prestamo.getProposito(), // Propósito
+                    prestamo.getCodigoSolicitante(), // Código del solicitante
+                    prestamo.getNombreSolicitante(), // Nombre del Solicitante
+                    prestamo.getTipoUsuario(), // Tipo de Usuario
+                    prestamo.getCorreoSolicitante() // Correo Solicitante
+                };
+                modeloDetallePrestamo.addRow(fila);
+            }
+        }
+    }
+}
     private void cargarActivosEnTabla(List<modelo.Equipos> listaEquipos) {
     if (listaEquipos == null) {
         listaEquipos = new java.util.ArrayList<>();
     }
+    
     // Llama al método auxiliar con la lista proporcionada.
     llenarTablaConLista(listaEquipos);
     }
@@ -106,32 +187,78 @@ public class Principal extends javax.swing.JFrame {
         modelo.addRow(fila);
     }
     }
+    private void cargarEquiposDisponibles() {
+    try {
+        // Asumiendo que existe un método en el controlador para buscar equipos disponibles
+        equiposDisponibles = controladorPrincipal.buscarEquiposDisponibles();
+        
+        DefaultTableModel modelo = (DefaultTableModel) jTablePrestamo.getModel();
+        modelo.setRowCount(0);
+
+        for (modelo.Equipos equipo : equiposDisponibles) {
+            Object[] fila = new Object[]{
+                equipo.getIDEquipo(),
+                equipo.getNombre(),
+                equipo.getMarca(),
+                equipo.getModeloSerie()
+            };
+            modelo.addRow(fila);
+        }
+    } catch (Exception e) {
+        JOptionPane.showMessageDialog(this, "Error al cargar equipos disponibles.", "Error DB", JOptionPane.ERROR_MESSAGE);
+    }
+}
     /**
      * Creates new form Gestion_Activos
      */
     public Principal(String nombreUsuario) {
-    initComponents();
-    
-    // 🚩 Usa el parámetro directamente
-    Etiqueta_de_Bienvenida.setText("Hola " + nombreUsuario + ", Bienvenido al sistema de gestión de recursos audiovisuales.");
-    
-    try {
-        // Inicializa la conexión y el controlador
-        controlador = new Controlador_Principal(); 
+    // 🚩 ELIMINADA: this.controladorPrincipal = controladorPrincipal; 
 
-        if (controlador.isConexionExitosa()) {
-             logger.info("Controlador de Equipos inicializado con éxito.");
-             cargarActivosEnTabla(); // Llamar solo si la conexión fue bien
-             cargarTablaUsuarios(); //llama al metodo cargar activos en tabla 
+    initComponents();
+    configurarTablaDetallePrestamo(); // Necesario para inicializar modeloDetallePrestamo
+
+    // Inicialización de renderers...
+    jTableUsuarios.setDefaultRenderer(Object.class, new Color_Celda_intercalada());
+    Tabla_activos.setDefaultRenderer(Object.class, new Color_Celda_intercalada());
+    jTablePrestamo.setDefaultRenderer(Object.class, new Color_Celda_intercalada());
+    jTableDetalle_Prestamo.setDefaultRenderer(Object.class, new Color_Celda_intercalada());
+    jTable6.setDefaultRenderer(Object.class, new Color_Celda_intercalada());
+    jTable5.setDefaultRenderer(Object.class, new Color_Celda_intercalada());
+    jTable4.setDefaultRenderer(Object.class, new Color_Celda_intercalada());
+    jTable7.setDefaultRenderer(Object.class, new Color_Celda_intercalada());
+    jTable8.setDefaultRenderer(Object.class, new Color_Celda_intercalada());
+
+    Etiqueta_de_Bienvenida.setText("Hola " + nombreUsuario + ", Bienvenido al sistema de gestión de recursos audiovisuales.");
+
+    try {
+        // 🚩 CORRECCIÓN CRÍTICA: Inicializa la variable 'controladorPrincipal'
+        controladorPrincipal = new Controlador_Principal(); 
+        
+        // 🚩 Si 'controlador' es una variable de clase y la usas en otros métodos,
+        // también debes asignarla para que apunte al mismo objeto:
+        
+
+        if (controladorPrincipal.isConexionExitosa()) { // Usa controladorPrincipal
+            logger.info("Controlador de Equipos inicializado con éxito.");
+            
+            cargarActivosEnTabla(controladorPrincipal.obtenerTodosLosEquipos()); // Pasa la lista
+            cargarTablaUsuarios(); 
+            cargarEquiposDisponibles(); // Ahora usa controladorPrincipal internamente
+            
+            // 🚩 DEPURACIÓN AÑADIDA: Llama al método de carga de la tabla de Préstamos
+            System.out.println("--- INICIANDO CARGA DE DETALLES DE PRÉSTAMOS ---");
+            cargarDetallePrestamos();
+            System.out.println("--- FINALIZADA LA CARGA DE DETALLES DE PRÉSTAMOS ---");
+            
         } else {
-             JOptionPane.showMessageDialog(this, 
-                 "Error grave: El sistema no pudo establecer la conexión a la base de datos.", 
-                 "Error de Conexión", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                "Error grave: El sistema no pudo establecer la conexión a la base de datos.",
+                "Error de Conexión", JOptionPane.ERROR_MESSAGE);
         }
     } catch (Exception e) {
         logger.severe("Error inesperado en Principal: " + e.getMessage());
     }
-    }
+}
     public Principal() {
     initComponents();
     
@@ -140,9 +267,9 @@ public class Principal extends javax.swing.JFrame {
     
     try {
         // Inicializa la conexión y el controlador
-        controlador = new Controlador_Principal(); 
+        controladorPrincipal = new Controlador_Principal(); 
 
-        if (controlador.isConexionExitosa()) {
+        if (controladorPrincipal.isConexionExitosa()) {
              logger.info("Controlador de Equipos inicializado con éxito.");
              cargarActivosEnTabla(); // Llamar solo si la conexión fue bien
              cargarTablaUsuarios();
@@ -154,6 +281,44 @@ public class Principal extends javax.swing.JFrame {
     } catch (Exception e) {
         logger.severe("Error inesperado en Principal: " + e.getMessage());
     }
+    }
+    private void configurarTablaDetallePrestamo() {
+    // Definición completa de las 13 columnas, incluyendo los placeholders del préstamo.
+    modeloDetallePrestamo = new DefaultTableModel(
+        new Object[]{
+            "ID Préstamo", 
+            "ID activo", 
+            "Nombre Equipo", 
+            "Marca", 
+            "Modelo/serie",
+            "ID Administrador/Monitor", 
+            "Fecha de Préstamo", 
+            "Fecha de Devolución Estimada",
+            "Propósito",
+            "Codigo del solicitante",
+            "Nombre del Solicitante",
+            "Tipo de Usuario",
+            "Correo Solicitante"
+        }, 
+        0
+    );
+    jTableDetalle_Prestamo.setModel(modeloDetallePrestamo);
+}
+
+    private void configurarSpinnersFechaHora() {
+    Date now = new Date();
+    // 1. Configuración del Spinner de Fecha y Hora de Préstamo
+    jSpinnerFecha_Prestamo.setModel(new SpinnerDateModel(now, null, null, java.util.Calendar.MINUTE));
+    // Formato: Año/Mes/Día Hora:Minuto
+    jSpinnerFecha_Prestamo.setEditor(new javax.swing.JSpinner.DateEditor(jSpinnerFecha_Prestamo, "yyyy/MM/dd HH:mm"));
+
+    // 2. Configuración del Spinner de Devolución Estimada (Ejemplo: Mañana a la misma hora)
+    java.util.Calendar cal = java.util.Calendar.getInstance();
+    cal.setTime(now);
+    cal.add(java.util.Calendar.DAY_OF_YEAR, 1);
+    
+    jSpinnerFecha_devolucion.setModel(new SpinnerDateModel(cal.getTime(), null, null, java.util.Calendar.MINUTE));
+    jSpinnerFecha_devolucion.setEditor(new javax.swing.JSpinner.DateEditor(jSpinnerFecha_devolucion, "yyyy/MM/dd HH:mm"));
     }
 
     /**
@@ -231,31 +396,37 @@ public class Principal extends javax.swing.JFrame {
         boton_guardar_usuario = new javax.swing.JButton();
         jScrollPane3 = new javax.swing.JScrollPane();
         jTableUsuarios = new javax.swing.JTable();
+        jPanel18 = new javax.swing.JPanel();
         jPanel3 = new javax.swing.JPanel();
         jPanel12 = new javax.swing.JPanel();
         jLabel20 = new javax.swing.JLabel();
         jLabel21 = new javax.swing.JLabel();
         jLabel22 = new javax.swing.JLabel();
         jLabel23 = new javax.swing.JLabel();
-        jTextField5 = new javax.swing.JTextField();
-        jTextField6 = new javax.swing.JTextField();
-        jTextField8 = new javax.swing.JTextField();
-        jComboBox2 = new javax.swing.JComboBox<>();
+        jTextFieldCodigo_Solicitante = new javax.swing.JTextField();
+        jTextFieldNombre_solicitante = new javax.swing.JTextField();
+        jTextFieldCorreo = new javax.swing.JTextField();
+        jComboBoxTipo_de_usuario = new javax.swing.JComboBox<>();
+        jLabel1 = new javax.swing.JLabel();
+        jTextFieldID_Administrador = new javax.swing.JTextField();
         jPanel13 = new javax.swing.JPanel();
         jLabel24 = new javax.swing.JLabel();
         jLabel25 = new javax.swing.JLabel();
         jLabel26 = new javax.swing.JLabel();
-        jTextField7 = new javax.swing.JTextField();
-        jSpinner1 = new javax.swing.JSpinner();
-        jSpinner2 = new javax.swing.JSpinner();
+        jTextFieldProposito_Prestamo = new javax.swing.JTextField();
+        jSpinnerFecha_Prestamo = new javax.swing.JSpinner();
+        jSpinnerFecha_devolucion = new javax.swing.JSpinner();
+        jLabel30 = new javax.swing.JLabel();
+        ID_Prestamo = new javax.swing.JTextField();
         jPanel14 = new javax.swing.JPanel();
-        jButton7 = new javax.swing.JButton();
-        jButton8 = new javax.swing.JButton();
-        jButton9 = new javax.swing.JButton();
+        jButtonAgregar_Equipo = new javax.swing.JButton();
+        jButtonQuitar_Equipo = new javax.swing.JButton();
+        jButtonRegistrar_Equipo = new javax.swing.JButton();
         jScrollPane4 = new javax.swing.JScrollPane();
-        jTable2 = new javax.swing.JTable();
+        jTablePrestamo = new javax.swing.JTable();
         jScrollPane5 = new javax.swing.JScrollPane();
-        jTable3 = new javax.swing.JTable();
+        jTableDetalle_Prestamo = new javax.swing.JTable();
+        jButtonGuardar_Prestamos = new javax.swing.JButton();
         jPanel2 = new javax.swing.JPanel();
         jPanel15 = new javax.swing.JPanel();
         jScrollPane9 = new javax.swing.JScrollPane();
@@ -447,9 +618,12 @@ public class Principal extends javax.swing.JFrame {
             }
         });
 
+        jTextFieldBuscar.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
         jLabelBuscar.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabelBuscar.setText("Buscar Equipos");
 
+        jButtonBuscar.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jButtonBuscar.setText("Busqueda");
         jButtonBuscar.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
         jButtonBuscar.addActionListener(new java.awt.event.ActionListener() {
@@ -540,23 +714,39 @@ public class Principal extends javax.swing.JFrame {
 
         jPanel6.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
 
+        jLabel2.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel2.setText("ID");
         jLabel2.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
 
+        jLabel3.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel3.setText("Nombre");
         jLabel3.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
 
+        jLabel10.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel10.setText("Marca");
 
+        jLabel11.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel11.setText("Modelo");
 
+        jLabel12.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel12.setText("Estado");
 
+        jLabel13.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel13.setText("Fecha de adquisicion");
 
+        jLabel14.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel14.setText("Observaciones");
 
-        jComboBoxEstado.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Disponible", "Prestado", "Dañado" }));
+        jTextFieldID.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        jTextFieldNombre.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        jTextFieldMarca.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        jTextFieldModelo.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        jComboBoxEstado.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jComboBoxEstado.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Disponible", "Dañado", "Con fallas" }));
         jComboBoxEstado.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jComboBoxEstadoActionPerformed(evt);
@@ -567,6 +757,7 @@ public class Principal extends javax.swing.JFrame {
         jTextAreaObservaciones.setRows(5);
         jScrollPane2.setViewportView(jTextAreaObservaciones);
 
+        Boton_nuevo.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         Boton_nuevo.setText("Nuevo");
         Boton_nuevo.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -574,6 +765,7 @@ public class Principal extends javax.swing.JFrame {
             }
         });
 
+        Boton_guardar.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         Boton_guardar.setText("Guardar");
         Boton_guardar.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -581,6 +773,7 @@ public class Principal extends javax.swing.JFrame {
             }
         });
 
+        Boton_eliminar.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         Boton_eliminar.setText("Eliminar");
         Boton_eliminar.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -588,6 +781,7 @@ public class Principal extends javax.swing.JFrame {
             }
         });
 
+        Boton_cancelar.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         Boton_cancelar.setText("Cancelar");
         Boton_cancelar.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -595,9 +789,13 @@ public class Principal extends javax.swing.JFrame {
             }
         });
 
+        jSpinnerFecha_de_adquisicion.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jSpinnerFecha_de_adquisicion.setModel(new javax.swing.SpinnerDateModel());
         jSpinnerFecha_de_adquisicion.setEditor(new javax.swing.JSpinner.DateEditor(jSpinnerFecha_de_adquisicion, "yyyy-MM-dd"));
 
+        Ubicacion_actual.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        jLabel28.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel28.setText("Ubicacion Actual");
 
         javax.swing.GroupLayout jPanel6Layout = new javax.swing.GroupLayout(jPanel6);
@@ -704,7 +902,7 @@ public class Principal extends javax.swing.JFrame {
                 .addComponent(jPanel9, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jPanel6, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(60, Short.MAX_VALUE))
+                .addContainerGap(27, Short.MAX_VALUE))
         );
         jPanel5Layout.setVerticalGroup(
             jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -719,22 +917,32 @@ public class Principal extends javax.swing.JFrame {
 
         jTabbedPane1.addTab("Gestios de equipos", jPanel5);
 
-        jLabel15.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        jPanel1.setBackground(new java.awt.Color(255, 255, 255));
+
+        jLabel15.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel15.setText("ID");
 
-        jLabel16.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        jLabel16.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel16.setText("Nombre");
 
-        jLabel17.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        jLabel17.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel17.setText("Contraseña");
 
-        jLabel18.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        jLabel18.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel18.setText("Rol");
 
-        jLabel19.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        jLabel19.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel19.setText("Nombre Completo");
 
-        combo_box_Rol.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        Id_cajadetexto.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        caja_texto_nombre.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        caja_texto_nombre_completo.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        caja_texto_contraseña.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        combo_box_Rol.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         combo_box_Rol.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Administrador", "Monitor" }));
         combo_box_Rol.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -742,7 +950,7 @@ public class Principal extends javax.swing.JFrame {
             }
         });
 
-        boton_nuevo_Usuario.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        boton_nuevo_Usuario.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         boton_nuevo_Usuario.setText("Nuevo");
         boton_nuevo_Usuario.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -750,7 +958,7 @@ public class Principal extends javax.swing.JFrame {
             }
         });
 
-        boton_eliminar_Usuario.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        boton_eliminar_Usuario.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         boton_eliminar_Usuario.setText("Eliminar");
         boton_eliminar_Usuario.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -758,7 +966,7 @@ public class Principal extends javax.swing.JFrame {
             }
         });
 
-        boton_guardar_usuario.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        boton_guardar_usuario.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         boton_guardar_usuario.setText("Guardar");
         boton_guardar_usuario.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -792,6 +1000,19 @@ public class Principal extends javax.swing.JFrame {
             jTableUsuarios.getColumnModel().getColumn(4).setPreferredWidth(120);
             jTableUsuarios.getColumnModel().getColumn(4).setMaxWidth(120);
         }
+
+        jPanel18.setBackground(new java.awt.Color(153, 0, 0));
+
+        javax.swing.GroupLayout jPanel18Layout = new javax.swing.GroupLayout(jPanel18);
+        jPanel18.setLayout(jPanel18Layout);
+        jPanel18Layout.setHorizontalGroup(
+            jPanel18Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGap(0, 226, Short.MAX_VALUE)
+        );
+        jPanel18Layout.setVerticalGroup(
+            jPanel18Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGap(0, 0, Short.MAX_VALUE)
+        );
 
         javax.swing.GroupLayout jPanel11Layout = new javax.swing.GroupLayout(jPanel11);
         jPanel11.setLayout(jPanel11Layout);
@@ -831,33 +1052,38 @@ public class Principal extends javax.swing.JFrame {
                                 .addComponent(boton_eliminar_Usuario)
                                 .addGap(30, 30, 30)
                                 .addComponent(boton_guardar_usuario)))))
-                .addContainerGap(193, Short.MAX_VALUE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jPanel18, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap())
         );
         jPanel11Layout.setVerticalGroup(
             jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel11Layout.createSequentialGroup()
-                .addContainerGap()
                 .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(jLabel15)
-                        .addComponent(jLabel17)
-                        .addComponent(jLabel19)
-                        .addComponent(caja_texto_nombre_completo, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addComponent(caja_texto_contraseña, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addComponent(Id_cajadetexto, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(18, 18, 18)
-                .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(jLabel16)
-                        .addComponent(jLabel18)
-                        .addComponent(caja_texto_nombre, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addComponent(combo_box_Rol, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(boton_nuevo_Usuario)
-                        .addComponent(boton_eliminar_Usuario)
-                        .addComponent(boton_guardar_usuario)))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 366, Short.MAX_VALUE)
+                    .addGroup(jPanel11Layout.createSequentialGroup()
+                        .addContainerGap()
+                        .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                .addComponent(jLabel15)
+                                .addComponent(jLabel17)
+                                .addComponent(jLabel19)
+                                .addComponent(caja_texto_nombre_completo, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(caja_texto_contraseña, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addComponent(Id_cajadetexto, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addGap(18, 18, 18)
+                        .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                .addComponent(jLabel16)
+                                .addComponent(jLabel18)
+                                .addComponent(caja_texto_nombre, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addComponent(combo_box_Rol, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addGroup(jPanel11Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                .addComponent(boton_nuevo_Usuario)
+                                .addComponent(boton_eliminar_Usuario)
+                                .addComponent(boton_guardar_usuario)))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 366, Short.MAX_VALUE))
+                    .addComponent(jPanel18, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addContainerGap())
         );
 
@@ -874,82 +1100,117 @@ public class Principal extends javax.swing.JFrame {
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel1Layout.createSequentialGroup()
                 .addComponent(jPanel11, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(0, 94, Short.MAX_VALUE))
+                .addGap(0, 97, Short.MAX_VALUE))
         );
 
         jTabbedPane1.addTab("Gestion de usuarios", jPanel1);
 
+        jLabel20.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel20.setText("Codigo o cedula");
 
+        jLabel21.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel21.setText("Nombre");
 
+        jLabel22.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel22.setText("Tipo de usuario");
 
+        jLabel23.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel23.setText("Correo");
 
-        jTextField6.addActionListener(new java.awt.event.ActionListener() {
+        jTextFieldCodigo_Solicitante.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        jTextFieldNombre_solicitante.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jTextFieldNombre_solicitante.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jTextField6ActionPerformed(evt);
+                jTextFieldNombre_solicitanteActionPerformed(evt);
             }
         });
 
-        jComboBox2.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Docente", "Estudiante", " " }));
+        jTextFieldCorreo.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        jComboBoxTipo_de_usuario.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jComboBoxTipo_de_usuario.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Docente", "Estudiante", "" }));
+
+        jLabel1.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jLabel1.setText("ID Administrador");
+
+        jTextFieldID_Administrador.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
 
         javax.swing.GroupLayout jPanel12Layout = new javax.swing.GroupLayout(jPanel12);
         jPanel12.setLayout(jPanel12Layout);
         jPanel12Layout.setHorizontalGroup(
             jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel12Layout.createSequentialGroup()
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel12Layout.createSequentialGroup()
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jLabel20)
-                    .addComponent(jLabel21)
-                    .addComponent(jLabel22)
-                    .addComponent(jLabel23))
-                .addGap(18, 18, 18)
-                .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel12Layout.createSequentialGroup()
-                        .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jTextField8, javax.swing.GroupLayout.PREFERRED_SIZE, 185, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jTextField6, javax.swing.GroupLayout.PREFERRED_SIZE, 185, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addGap(30, 30, 30))
+                    .addGroup(jPanel12Layout.createSequentialGroup()
+                        .addComponent(jLabel1)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(jTextFieldID_Administrador, javax.swing.GroupLayout.PREFERRED_SIZE, 185, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(jPanel12Layout.createSequentialGroup()
                         .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jComboBox2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jTextField5, javax.swing.GroupLayout.PREFERRED_SIZE, 185, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addContainerGap())))
+                            .addComponent(jLabel20)
+                            .addComponent(jLabel21)
+                            .addComponent(jLabel22)
+                            .addComponent(jLabel23))
+                        .addGap(18, 18, 18)
+                        .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel12Layout.createSequentialGroup()
+                                .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addComponent(jTextFieldCorreo, javax.swing.GroupLayout.PREFERRED_SIZE, 185, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(jTextFieldNombre_solicitante, javax.swing.GroupLayout.PREFERRED_SIZE, 185, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addGap(30, 30, 30))
+                            .addGroup(jPanel12Layout.createSequentialGroup()
+                                .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addComponent(jComboBoxTipo_de_usuario, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(jTextFieldCodigo_Solicitante, javax.swing.GroupLayout.PREFERRED_SIZE, 185, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addContainerGap())))))
         );
         jPanel12Layout.setVerticalGroup(
             jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel12Layout.createSequentialGroup()
                 .addGap(23, 23, 23)
                 .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jTextField5, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jTextFieldCodigo_Solicitante, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jLabel20))
                 .addGap(52, 52, 52)
                 .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel21)
-                    .addComponent(jTextField6, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jTextFieldNombre_solicitante, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(70, 70, 70)
                 .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel22)
-                    .addComponent(jComboBox2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jComboBoxTipo_de_usuario, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(93, 93, 93)
                 .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel23)
-                    .addComponent(jTextField8, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(jTextFieldCorreo, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(jPanel12Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jLabel1, javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addComponent(jTextFieldID_Administrador, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(41, 41, 41))
         );
 
+        jLabel24.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel24.setText("Proposito");
 
+        jLabel25.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel25.setText("Fecha de devolucion");
 
+        jLabel26.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel26.setText("Fecha de prestamo");
 
-        jSpinner1.setModel(new javax.swing.SpinnerDateModel());
+        jTextFieldProposito_Prestamo.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
 
-        jSpinner2.setModel(new javax.swing.SpinnerDateModel());
+        jSpinnerFecha_Prestamo.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jSpinnerFecha_Prestamo.setModel(new javax.swing.SpinnerDateModel());
+
+        jSpinnerFecha_devolucion.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jSpinnerFecha_devolucion.setModel(new javax.swing.SpinnerDateModel());
+
+        jLabel30.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jLabel30.setText("ID_Prestamo");
 
         javax.swing.GroupLayout jPanel13Layout = new javax.swing.GroupLayout(jPanel13);
         jPanel13.setLayout(jPanel13Layout);
@@ -957,105 +1218,68 @@ public class Principal extends javax.swing.JFrame {
             jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel13Layout.createSequentialGroup()
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jLabel26)
+                    .addComponent(jLabel25)
+                    .addComponent(jLabel30)
+                    .addComponent(jLabel24))
+                .addGap(45, 45, 45)
                 .addGroup(jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addGroup(jPanel13Layout.createSequentialGroup()
-                        .addGroup(jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel26)
-                            .addComponent(jLabel25))
-                        .addGap(45, 45, 45)
-                        .addGroup(jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
-                            .addComponent(jSpinner2)
-                            .addComponent(jSpinner1)))
-                    .addGroup(jPanel13Layout.createSequentialGroup()
-                        .addComponent(jLabel24)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(jTextField7, javax.swing.GroupLayout.PREFERRED_SIZE, 176, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                    .addComponent(jTextFieldProposito_Prestamo)
+                    .addComponent(jSpinnerFecha_devolucion, javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addComponent(jSpinnerFecha_Prestamo, javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addComponent(ID_Prestamo)))
         );
         jPanel13Layout.setVerticalGroup(
             jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel13Layout.createSequentialGroup()
                 .addGap(22, 22, 22)
                 .addGroup(jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jTextField7, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jTextFieldProposito_Prestamo, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jLabel24))
+                .addGap(46, 46, 46)
+                .addGroup(jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jLabel30)
+                    .addComponent(ID_Prestamo, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addGroup(jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel26)
-                    .addComponent(jSpinner1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jSpinnerFecha_Prestamo, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(125, 125, 125)
                 .addGroup(jPanel13Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel25)
-                    .addComponent(jSpinner2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jSpinnerFecha_devolucion, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(136, 136, 136))
         );
 
-        jButton7.setText("Agregar Equipo");
+        jButtonAgregar_Equipo.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jButtonAgregar_Equipo.setText("Agregar Equipo");
+        jButtonAgregar_Equipo.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButtonAgregar_EquipoActionPerformed(evt);
+            }
+        });
 
-        jButton8.setText("Quitar Equipo");
+        jButtonQuitar_Equipo.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jButtonQuitar_Equipo.setText("Quitar Equipo");
+        jButtonQuitar_Equipo.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButtonQuitar_EquipoActionPerformed(evt);
+            }
+        });
 
-        jButton9.setText("Registrar Prestamo");
+        jButtonRegistrar_Equipo.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jButtonRegistrar_Equipo.setText("Registrar Prestamo");
+        jButtonRegistrar_Equipo.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButtonRegistrar_EquipoActionPerformed(evt);
+            }
+        });
 
         jScrollPane4.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
         jScrollPane4.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 
-        jTable2.setModel(new javax.swing.table.DefaultTableModel(
-            new Object [][] {
-                {null, null, null, null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null, null, null, null},
-                {null, null, null, null, null, null, null, null, null, null}
-            },
-            new String [] {
-                "ID prestamo", "ID monitor", "Fecha de prestamo", "Fecha de devolucion estimada", "Fecha de devolucion real", "Proposito", "Nombre del solicitante", "Tipo de usuario", "Correo  solicitante", "estado del prestamo"
-            }
-        ) {
-            Class[] types = new Class [] {
-                java.lang.Object.class, java.lang.Object.class, java.lang.Object.class, java.lang.Object.class, java.lang.Object.class, java.lang.String.class, java.lang.String.class, java.lang.String.class, java.lang.Object.class, java.lang.String.class
-            };
-
-            public Class getColumnClass(int columnIndex) {
-                return types [columnIndex];
-            }
-        });
-        jTable2.setAutoResizeMode(javax.swing.JTable.AUTO_RESIZE_OFF);
-        jScrollPane4.setViewportView(jTable2);
-        if (jTable2.getColumnModel().getColumnCount() > 0) {
-            jTable2.getColumnModel().getColumn(0).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(0).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(0).setMaxWidth(150);
-            jTable2.getColumnModel().getColumn(1).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(1).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(1).setMaxWidth(150);
-            jTable2.getColumnModel().getColumn(2).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(2).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(2).setMaxWidth(150);
-            jTable2.getColumnModel().getColumn(3).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(3).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(3).setMaxWidth(150);
-            jTable2.getColumnModel().getColumn(4).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(4).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(4).setMaxWidth(150);
-            jTable2.getColumnModel().getColumn(5).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(5).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(5).setMaxWidth(150);
-            jTable2.getColumnModel().getColumn(6).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(6).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(6).setMaxWidth(150);
-            jTable2.getColumnModel().getColumn(7).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(7).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(7).setMaxWidth(150);
-            jTable2.getColumnModel().getColumn(8).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(8).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(8).setMaxWidth(150);
-            jTable2.getColumnModel().getColumn(9).setMinWidth(100);
-            jTable2.getColumnModel().getColumn(9).setPreferredWidth(150);
-            jTable2.getColumnModel().getColumn(9).setMaxWidth(150);
-        }
-
-        jScrollPane5.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
-        jScrollPane5.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-
-        jTable3.setModel(new javax.swing.table.DefaultTableModel(
+        jTablePrestamo.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
                 {null, null, null, null},
                 {null, null, null, null},
@@ -1063,25 +1287,64 @@ public class Principal extends javax.swing.JFrame {
                 {null, null, null, null}
             },
             new String [] {
-                "ID del prestamo", "ID del equipo", "Estado de devolucion", "observaciones de fallas"
+                "ID Activo", "Nombre Equipo", "Marca", "N° de Serie"
             }
         ));
-        jTable3.setAutoResizeMode(javax.swing.JTable.AUTO_RESIZE_OFF);
-        jScrollPane5.setViewportView(jTable3);
-        if (jTable3.getColumnModel().getColumnCount() > 0) {
-            jTable3.getColumnModel().getColumn(0).setMinWidth(100);
-            jTable3.getColumnModel().getColumn(0).setPreferredWidth(150);
-            jTable3.getColumnModel().getColumn(0).setMaxWidth(150);
-            jTable3.getColumnModel().getColumn(1).setMinWidth(100);
-            jTable3.getColumnModel().getColumn(1).setPreferredWidth(150);
-            jTable3.getColumnModel().getColumn(1).setMaxWidth(150);
-            jTable3.getColumnModel().getColumn(2).setMinWidth(100);
-            jTable3.getColumnModel().getColumn(2).setPreferredWidth(150);
-            jTable3.getColumnModel().getColumn(2).setMaxWidth(150);
-            jTable3.getColumnModel().getColumn(3).setMinWidth(100);
-            jTable3.getColumnModel().getColumn(3).setPreferredWidth(150);
-            jTable3.getColumnModel().getColumn(3).setMaxWidth(150);
+        jTablePrestamo.setAutoResizeMode(javax.swing.JTable.AUTO_RESIZE_OFF);
+        jScrollPane4.setViewportView(jTablePrestamo);
+        if (jTablePrestamo.getColumnModel().getColumnCount() > 0) {
+            jTablePrestamo.getColumnModel().getColumn(0).setMinWidth(100);
+            jTablePrestamo.getColumnModel().getColumn(0).setPreferredWidth(150);
+            jTablePrestamo.getColumnModel().getColumn(0).setMaxWidth(150);
+            jTablePrestamo.getColumnModel().getColumn(1).setMinWidth(100);
+            jTablePrestamo.getColumnModel().getColumn(1).setPreferredWidth(150);
+            jTablePrestamo.getColumnModel().getColumn(1).setMaxWidth(150);
+            jTablePrestamo.getColumnModel().getColumn(2).setMinWidth(100);
+            jTablePrestamo.getColumnModel().getColumn(2).setPreferredWidth(150);
+            jTablePrestamo.getColumnModel().getColumn(2).setMaxWidth(150);
+            jTablePrestamo.getColumnModel().getColumn(3).setMinWidth(100);
+            jTablePrestamo.getColumnModel().getColumn(3).setPreferredWidth(150);
+            jTablePrestamo.getColumnModel().getColumn(3).setMaxWidth(150);
         }
+
+        jScrollPane5.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
+        jScrollPane5.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+
+        jTableDetalle_Prestamo.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+                {null, null, null, null, null, null, null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null, null, null, null, null, null, null},
+                {null, null, null, null, null, null, null, null, null, null, null, null, null, null}
+            },
+            new String [] {
+                " ID Prestamo", "ID activo", "Nombre Equipo", "Marca", "Modelo/serie", "ID Aministrador/Monitor", "Fecha de Préstamo", "Fecha de Devolución Estimada", "Fecha de Devolución Real", "Propósito", "Codigo", "Nombre del Solicitante", "Tipo de Usuario", "Correo Solicitante"
+            }
+        ));
+        jTableDetalle_Prestamo.setAutoResizeMode(javax.swing.JTable.AUTO_RESIZE_OFF);
+        jScrollPane5.setViewportView(jTableDetalle_Prestamo);
+        if (jTableDetalle_Prestamo.getColumnModel().getColumnCount() > 0) {
+            jTableDetalle_Prestamo.getColumnModel().getColumn(5).setMinWidth(100);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(5).setPreferredWidth(150);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(5).setMaxWidth(150);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(6).setMinWidth(100);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(6).setPreferredWidth(150);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(6).setMaxWidth(150);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(7).setMinWidth(100);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(7).setPreferredWidth(150);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(7).setMaxWidth(150);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(10).setMinWidth(100);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(10).setPreferredWidth(150);
+            jTableDetalle_Prestamo.getColumnModel().getColumn(10).setMaxWidth(150);
+        }
+
+        jButtonGuardar_Prestamos.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+        jButtonGuardar_Prestamos.setText("Guardar datos ");
+        jButtonGuardar_Prestamos.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButtonGuardar_PrestamosActionPerformed(evt);
+            }
+        });
 
         javax.swing.GroupLayout jPanel14Layout = new javax.swing.GroupLayout(jPanel14);
         jPanel14.setLayout(jPanel14Layout);
@@ -1090,25 +1353,32 @@ public class Principal extends javax.swing.JFrame {
             .addGroup(jPanel14Layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(jPanel14Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jScrollPane4, javax.swing.GroupLayout.DEFAULT_SIZE, 460, Short.MAX_VALUE)
+                    .addComponent(jScrollPane4, javax.swing.GroupLayout.DEFAULT_SIZE, 426, Short.MAX_VALUE)
                     .addGroup(jPanel14Layout.createSequentialGroup()
-                        .addComponent(jButton7)
-                        .addGap(62, 62, 62)
-                        .addComponent(jButton8)
+                        .addComponent(jButtonAgregar_Equipo)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(jButton9))
-                    .addComponent(jScrollPane5, javax.swing.GroupLayout.DEFAULT_SIZE, 460, Short.MAX_VALUE))
+                        .addGroup(jPanel14Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addComponent(jButtonQuitar_Equipo, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(jButtonGuardar_Prestamos, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addGap(18, 18, 18)
+                        .addComponent(jButtonRegistrar_Equipo))
+                    .addComponent(jScrollPane5, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE))
                 .addContainerGap())
         );
         jPanel14Layout.setVerticalGroup(
             jPanel14Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel14Layout.createSequentialGroup()
-                .addGap(19, 19, 19)
-                .addGroup(jPanel14Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jButton7)
-                    .addComponent(jButton8)
-                    .addComponent(jButton9))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGroup(jPanel14Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addGroup(jPanel14Layout.createSequentialGroup()
+                        .addGap(19, 19, 19)
+                        .addGroup(jPanel14Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(jButtonAgregar_Equipo)
+                            .addComponent(jButtonRegistrar_Equipo)))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel14Layout.createSequentialGroup()
+                        .addComponent(jButtonGuardar_Prestamos)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(jButtonQuitar_Equipo)))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jScrollPane4, javax.swing.GroupLayout.PREFERRED_SIZE, 191, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jScrollPane5, javax.swing.GroupLayout.PREFERRED_SIZE, 215, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -1131,10 +1401,10 @@ public class Principal extends javax.swing.JFrame {
             jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel3Layout.createSequentialGroup()
                 .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
-                    .addComponent(jPanel14, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.PREFERRED_SIZE, 466, Short.MAX_VALUE)
+                    .addComponent(jPanel14, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(jPanel12, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(jPanel13, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                .addGap(0, 82, Short.MAX_VALUE))
+                .addGap(0, 74, Short.MAX_VALUE))
         );
 
         jTabbedPane1.addTab("Registro de Prestamos", jPanel3);
@@ -1169,6 +1439,8 @@ public class Principal extends javax.swing.JFrame {
             jTable6.getColumnModel().getColumn(3).setPreferredWidth(150);
             jTable6.getColumnModel().getColumn(3).setMaxWidth(150);
         }
+
+        jTextField3.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
 
         javax.swing.GroupLayout jPanel15Layout = new javax.swing.GroupLayout(jPanel15);
         jPanel15.setLayout(jPanel15Layout);
@@ -1222,11 +1494,16 @@ public class Principal extends javax.swing.JFrame {
             jTable5.getColumnModel().getColumn(2).setMaxWidth(150);
         }
 
+        jComboBox1.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jComboBox1.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Bien ", "Anomalias/Fallas", " " }));
 
+        jTextField1.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
+
+        jButton10.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jButton10.setText("Corfirmar Devolucion");
 
         jLabel27.setBackground(new java.awt.Color(255, 255, 255));
+        jLabel27.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jLabel27.setText("                   Fecha de devolucion");
 
         javax.swing.GroupLayout jPanel16Layout = new javax.swing.GroupLayout(jPanel16);
@@ -1280,11 +1557,12 @@ public class Principal extends javax.swing.JFrame {
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                     .addComponent(jPanel16, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(jPanel15, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                .addGap(0, 44, Short.MAX_VALUE))
+                .addGap(0, 47, Short.MAX_VALUE))
         );
 
         jTabbedPane1.addTab("Registro de devoluciones", jPanel2);
 
+        jListPanel_de_administracion.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jListPanel_de_administracion.setModel(new javax.swing.AbstractListModel<String>() {
             String[] strings = { "Análisis de Fallas y Mantenimiento", "Análisis de Uso y Demanda", "Análisis de Comportamiento del Usuario", "Historial de Activos", " " };
             public int getSize() { return strings.length; }
@@ -1407,12 +1685,14 @@ public class Principal extends javax.swing.JFrame {
         jPanel17Layout.setVerticalGroup(
             jPanel17Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addComponent(jScrollPane10)
-            .addComponent(jScrollPane11, javax.swing.GroupLayout.DEFAULT_SIZE, 501, Short.MAX_VALUE)
-            .addComponent(jScrollPane12, javax.swing.GroupLayout.DEFAULT_SIZE, 501, Short.MAX_VALUE)
+            .addComponent(jScrollPane11, javax.swing.GroupLayout.DEFAULT_SIZE, 502, Short.MAX_VALUE)
+            .addComponent(jScrollPane12, javax.swing.GroupLayout.DEFAULT_SIZE, 502, Short.MAX_VALUE)
         );
 
+        jButtonReporte_PDF.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jButtonReporte_PDF.setText("Descargar Reporte en PDF");
 
+        jButtonreporte_excel.setFont(new java.awt.Font("Tahoma", 1, 12)); // NOI18N
         jButtonreporte_excel.setText("Descargar Reporte en excel");
 
         javax.swing.GroupLayout jPanel19Layout = new javax.swing.GroupLayout(jPanel19);
@@ -1443,7 +1723,7 @@ public class Principal extends javax.swing.JFrame {
                 .addComponent(jScrollPane7, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jPanel19, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-            .addComponent(jPanel17, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 1103, Short.MAX_VALUE)
+            .addComponent(jPanel17, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
         );
         jPanel4Layout.setVerticalGroup(
             jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1465,6 +1745,11 @@ public class Principal extends javax.swing.JFrame {
         Etiqueta_de_Bienvenida.setText("Hola + usuario Bienvenido al sistema de gestion de recursos audiovisuales ");
 
         jButton1.setText("Salir");
+        jButton1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton1ActionPerformed(evt);
+            }
+        });
 
         javax.swing.GroupLayout jPanel7Layout = new javax.swing.GroupLayout(jPanel7);
         jPanel7.setLayout(jPanel7Layout);
@@ -1541,7 +1826,7 @@ public class Principal extends javax.swing.JFrame {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jTabbedPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 583, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(Menu, javax.swing.GroupLayout.PREFERRED_SIZE, 490, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(Menu, javax.swing.GroupLayout.PREFERRED_SIZE, 463, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jPanel10, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
         );
@@ -1605,7 +1890,7 @@ public class Principal extends javax.swing.JFrame {
 
     try {
         // 1. Llama al método de búsqueda REAL en tu controlador
-        List<modelo.Equipos> resultados = controlador.buscarPorCriterio(terminoBusqueda); 
+        List<modelo.Equipos> resultados = controladorPrincipal.buscarPorCriterio(terminoBusqueda); 
 
         // 2. Cargar la tabla con los resultados (usando el método sobrecargado)
         cargarActivosEnTabla(resultados); 
@@ -1641,9 +1926,9 @@ public class Principal extends javax.swing.JFrame {
         // TODO add your handling code here:
     }//GEN-LAST:event_combo_box_RolActionPerformed
 
-    private void jTextField6ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextField6ActionPerformed
+    private void jTextFieldNombre_solicitanteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextFieldNombre_solicitanteActionPerformed
         // TODO add your handling code here:
-    }//GEN-LAST:event_jTextField6ActionPerformed
+    }//GEN-LAST:event_jTextFieldNombre_solicitanteActionPerformed
 
     private void Boton_nuevoActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_Boton_nuevoActionPerformed
         // Llama a la lógica de limpieza centralizada
@@ -1724,7 +2009,7 @@ public class Principal extends javax.swing.JFrame {
 
 
         // 2. LLAMADA AL CONTROLADOR CENTRALIZADO (¡CLAVE!)
-        controlador.guardarEquipo(equipo); // <--- ESTO DEBE SER LA ÚNICA LLAMADA DE GUARDADO
+        controladorPrincipal.guardarEquipo(equipo); // <--- ESTO DEBE SER LA ÚNICA LLAMADA DE GUARDADO
 
         // 3. Mostrar éxito y actualizar la interfaz
         String mensaje = esEdicion ? "actualizado" : "guardado";
@@ -1767,7 +2052,7 @@ public class Principal extends javax.swing.JFrame {
             // 3. OBTENER ID y EJECUTAR ELIMINACIÓN
             idEquipo = Integer.parseInt(idText); 
             
-            controlador.eliminarEquipo(idEquipo); 
+            controladorPrincipal.eliminarEquipo(idEquipo); 
             
             // 4. ACCIONES POST-ELIMINACIÓN
             cargarActivosEnTabla();
@@ -1805,14 +2090,14 @@ public class Principal extends javax.swing.JFrame {
     }//GEN-LAST:event_jTabbedPane1StateChanged
     private void cargarActivosEnTabla() {
     // 1. Verificar si la conexión fue exitosa
-    if (controlador == null || !controlador.isConexionExitosa()) {
+    if (controladorPrincipal == null || !controladorPrincipal.isConexionExitosa()) {
         logger.warning("No se puede cargar la tabla. La conexión JPA falló al inicio.");
         return; 
     }
 
     try {
         // 2. Obtener la lista de todos los equipos a través de la capa de control
-        List<Equipos> listaEquipos = controlador.obtenerTodosLosEquipos(); 
+        List<Equipos> listaEquipos = controladorPrincipal.obtenerTodosLosEquipos(); 
         
         // 3. Llamar al método auxiliar para hacer el trabajo de llenado
         llenarTablaConLista(listaEquipos);
@@ -1826,12 +2111,12 @@ public class Principal extends javax.swing.JFrame {
     }
     }
     private void cargarTablaUsuarios() {
-    if (controlador == null || !controlador.isConexionExitosa()) {
+    if (controladorPrincipal == null || !controladorPrincipal.isConexionExitosa()) {
         logger.warning("No se puede cargar la tabla de usuarios. La conexión falló.");
         return;
     }
     try {
-        List<Usuario> listaUsuarios = controlador.obtenerTodosLosUsuarios();
+        List<Usuario> listaUsuarios = controladorPrincipal.obtenerTodosLosUsuarios();
         llenarTablaUsuariosConLista(listaUsuarios);
     } catch (Exception ex) {
         logger.severe("Error al cargar la tabla de usuarios: " + ex.getMessage());
@@ -1943,7 +2228,7 @@ public class Principal extends javax.swing.JFrame {
         try {
             idUsuario = Integer.parseInt(idText); 
             
-            controlador.eliminarUsuario(idUsuario); 
+            controladorPrincipal.eliminarUsuario(idUsuario); 
             
             cargarTablaUsuarios();
             JOptionPane.showMessageDialog(this, "✅ Usuario con ID " + idUsuario + " eliminado exitosamente.", "Éxito", JOptionPane.INFORMATION_MESSAGE);
@@ -1973,7 +2258,7 @@ public class Principal extends javax.swing.JFrame {
         
         // 1. INTENTAR ENCONTRAR UN USUARIO EXISTENTE POR EL LOGIN
         // Si el controlador encuentra un usuario con ese nombre, significa que es una EDICIÓN.
-        modelo.Usuario usuario = controlador.obtenerUsuarioPorNombre(nombreUsuarioLogin);
+        modelo.Usuario usuario = controladorPrincipal.obtenerUsuarioPorNombre(nombreUsuarioLogin);
         boolean esEdicion = (usuario != null);
         
         // Si no se encontró, creamos una nueva instancia para CREACIÓN
@@ -1998,7 +2283,7 @@ public class Principal extends javax.swing.JFrame {
         }
         String nombreRol = rolSeleccionado.toString().trim();
         
-        modelo.Rol rolEncontrado = controlador.obtenerRolPorNombre(nombreRol); 
+        modelo.Rol rolEncontrado = controladorPrincipal.obtenerRolPorNombre(nombreRol); 
 
         if (rolEncontrado == null) {
              throw new Exception("El Rol '" + nombreRol + "' no fue encontrado. Verifique la tabla de Roles.");
@@ -2008,7 +2293,7 @@ public class Principal extends javax.swing.JFrame {
 
         // 4. LLAMADA AL CONTROLADOR CENTRAL
         // El método guardarUsuario debe chequear si el objeto tiene ID o no para usar create/edit.
-        controlador.guardarUsuario(usuario); 
+        controladorPrincipal.guardarUsuario(usuario); 
 
         // 5. Mostrar éxito y actualizar la interfaz
         String mensaje = esEdicion ? "actualizado" : "guardado";
@@ -2032,6 +2317,249 @@ public class Principal extends javax.swing.JFrame {
         JOptionPane.showMessageDialog(this, "❌ Error al procesar la operación: " + e.getMessage(), "Error de BD/JPA", JOptionPane.ERROR_MESSAGE);
     }
     }//GEN-LAST:event_boton_guardar_usuarioActionPerformed
+
+    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jButton1ActionPerformed
+
+    private void jButtonAgregar_EquipoActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonAgregar_EquipoActionPerformed
+        int filaSeleccionada = jTablePrestamo.getSelectedRow();
+    
+    if (filaSeleccionada == -1) {
+        JOptionPane.showMessageDialog(this, "Debe seleccionar un equipo de la lista de disponibles.", "Selección Requerida", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
+
+    DefaultTableModel modeloTablaPrestamo = (DefaultTableModel) jTablePrestamo.getModel();
+    DefaultTableModel modeloDetalle = (DefaultTableModel) jTableDetalle_Prestamo.getModel(); 
+
+    // Extraer los 4 datos del equipo de jTablePrestamo
+    // [0]IDEquipo, [1]Nombre, [2]Marca, [3]ModeloSerie
+    Object idActivo = modeloTablaPrestamo.getValueAt(filaSeleccionada, 0);
+    Object nombreEquipo = modeloTablaPrestamo.getValueAt(filaSeleccionada, 1);
+    Object marca = modeloTablaPrestamo.getValueAt(filaSeleccionada, 2);
+    Object modeloSerie = modeloTablaPrestamo.getValueAt(filaSeleccionada, 3);
+    
+    // Verificar duplicados (comparamos con el ID activo, que está en el índice 1 del detalle)
+    for (int i = 0; i < modeloDetalle.getRowCount(); i++) {
+        if (modeloDetalle.getValueAt(i, 1) != null && modeloDetalle.getValueAt(i, 1).equals(idActivo)) { 
+            JOptionPane.showMessageDialog(this, "El equipo con ID " + idActivo + " ya ha sido agregado.", "Duplicado", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+    }
+
+    // Preparar la nueva fila para jTableDetalle_Prestamo (14 columnas)
+    int numeroColumnasDetalle = modeloDetalle.getColumnCount(); // Debería ser 14
+    Object[] nuevaFilaDetalle = new Object[numeroColumnasDetalle];
+
+    // Columna 0: ID Préstamo (se deja NULL)
+    nuevaFilaDetalle[0] = null; 
+
+    // Columnas 1 al 4: Datos del equipo (insertados en el orden correcto)
+    nuevaFilaDetalle[1] = idActivo;
+    nuevaFilaDetalle[2] = nombreEquipo;
+    nuevaFilaDetalle[3] = marca;
+    nuevaFilaDetalle[4] = modeloSerie;
+    
+    // Columnas 5 al 13: El resto se quedan como NULL/default hasta que se presionen 'Registrar'
+    // Se recomienda inicializar las columnas de texto con "" y otras con null si son opcionales
+    // Java ya inicializa Object[] con nulls, así que no es necesario escribir las 9 líneas restantes.
+
+    modeloDetalle.addRow(nuevaFilaDetalle);
+    jTablePrestamo.clearSelection();
+    }//GEN-LAST:event_jButtonAgregar_EquipoActionPerformed
+
+    private void jButtonQuitar_EquipoActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonQuitar_EquipoActionPerformed
+        int filaSeleccionada = jTableDetalle_Prestamo.getSelectedRow();
+    
+    if (filaSeleccionada == -1) {
+        JOptionPane.showMessageDialog(this, "Seleccione un equipo de la lista inferior para quitarlo.", "Advertencia", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
+
+    modeloDetallePrestamo.removeRow(filaSeleccionada);
+    }//GEN-LAST:event_jButtonQuitar_EquipoActionPerformed
+
+    private void jButtonRegistrar_EquipoActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonRegistrar_EquipoActionPerformed
+        // Obtener el modelo de la tabla de detalle
+    DefaultTableModel modeloDetalle = (DefaultTableModel) jTableDetalle_Prestamo.getModel(); 
+
+    // 1. Validaciones iniciales
+    if (modeloDetalle.getRowCount() == 0) {
+        JOptionPane.showMessageDialog(this, "Debe agregar al menos un equipo al detalle del préstamo.", "Error de Datos", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+    
+    // Objeto para formatear las fechas a un String legible (soluciona el problema de la fecha larga)
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    
+    // 2. Recolección y validación de datos del formulario (la cabecera del préstamo)
+    
+    // Columna 0: ID Préstamo
+    String idPrestamoStr = ID_Prestamo.getText().trim();
+    if (idPrestamoStr.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "El campo ID Préstamo no puede estar vacío.", "Error de Datos", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+    Object idPrestamo = idPrestamoStr;
+    
+    // Columna 5: ID Administrador/Monitor
+    String monitorIdStr = jTextFieldID_Administrador.getText().trim(); 
+    if (monitorIdStr.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "El campo ID Administrador no puede estar vacío.", "Error de Datos", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+    Object monitorId = monitorIdStr;
+    
+    // Columna 6: Fecha de Préstamo
+    Date dateFechaPrestamo = (Date) jSpinnerFecha_Prestamo.getValue();
+    String fechaPrestamo = sdf.format(dateFechaPrestamo);
+
+    // Columna 7: Fecha de Devolución Estimada
+    Date dateFechaDevolucionEstimada = (Date) jSpinnerFecha_devolucion.getValue();
+    String fechaDevolucionEstimada = sdf.format(dateFechaDevolucionEstimada);
+
+    // Extracción de otros datos
+    String proposito = jTextFieldProposito_Prestamo.getText();
+    String codigoSolicitante = jTextFieldCodigo_Solicitante.getText();
+    String nombreSolicitante = jTextFieldNombre_solicitante.getText();
+    String tipoUsuario = (String) jComboBoxTipo_de_usuario.getSelectedItem();
+    String correoSolicitante = jTextFieldCorreo.getText();
+
+    // 3. Iterar sobre todas las filas del detalle y actualizar las columnas de cabecera
+    
+    // Nota: Los índices fueron ajustados debido a la eliminación de la columna 8 (Fecha Devolución Real)
+    for (int i = 0; i < modeloDetalle.getRowCount(); i++) {
+        
+        // Columna 0: ID Préstamo
+        modeloDetalle.setValueAt(idPrestamo, i, 0); 
+        
+        // Columna 5: ID Administrador/Monitor
+        modeloDetalle.setValueAt(monitorId, i, 5);
+        
+        // Columna 6: Fecha de Préstamo (String Formateado)
+        modeloDetalle.setValueAt(fechaPrestamo, i, 6);
+        
+        // Columna 7: Fecha de Devolución Estimada (String Formateado)
+        modeloDetalle.setValueAt(fechaDevolucionEstimada, i, 7);
+        
+        // Columna 8: Propósito (Anteriormente índice 9)
+        modeloDetalle.setValueAt(proposito, i, 8);
+        
+        // Columna 9: Código del solicitante (Anteriormente índice 10)
+        modeloDetalle.setValueAt(codigoSolicitante, i, 9);
+        
+        // Columna 10: Nombre del Solicitante (Anteriormente índice 11)
+        modeloDetalle.setValueAt(nombreSolicitante, i, 10);
+        
+        // Columna 11: Tipo de Usuario (Anteriormente índice 12)
+        modeloDetalle.setValueAt(tipoUsuario, i, 11);
+        
+        // Columna 12: Correo Solicitante (Anteriormente índice 13)
+        modeloDetalle.setValueAt(correoSolicitante, i, 12);
+    }
+    
+    // 4. Notificar al usuario
+    JOptionPane.showMessageDialog(this, "Datos del préstamo cargados correctamente en todas las filas del detalle.", "Datos Preparados", JOptionPane.INFORMATION_MESSAGE);
+    
+    // 5. Paso Final: Llamada al controlador para guardar en la base de datos
+    // Aquí es donde usualmente llamarías a tu capa de persistencia para guardar 
+    // todas las filas de modeloDetalle en la tabla DETALLE_PRESTAMO de tu base de datos.
+}
+
+// Método de limpieza para el formulario de préstamo
+private void limpiarFormularioPrestamo() {
+    // 1. Limpiar campos de texto
+    // jTextFieldCodigo_Solicitante.setText(""); // Si no implementa búsqueda
+    jTextFieldNombre_solicitante.setText("");
+    jTextFieldCorreo.setText("");
+    jTextFieldProposito_Prestamo.setText("");
+    
+    // 2. Restablecer ComboBox
+    jComboBoxTipo_de_usuario.setSelectedIndex(0);
+    
+    // 3. Limpiar la lista de equipos seleccionados
+    modeloDetallePrestamo.setRowCount(0);
+    
+    // 4. Resetear Spinners a la hora actual
+    configurarSpinnersFechaHora();
+    }//GEN-LAST:event_jButtonRegistrar_EquipoActionPerformed
+
+    private void jButtonGuardar_PrestamosActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonGuardar_PrestamosActionPerformed
+      try {
+        // 1. Recopilar datos (Prestamo - Cabecera)
+        // 🚨 CRÍTICO: Asegúrate que jTextFieldID_Administrador contenga un LONG válido (ej: 1, 2, 5)
+        Long idMonitor = Long.parseLong(jTextFieldID_Administrador.getText().trim());
+
+        // Datos del solicitante y préstamo
+        String nombreSolicitante = jTextFieldNombre_solicitante.getText().trim();
+        String tipoUsuario = jComboBoxTipo_de_usuario.getSelectedItem().toString();
+        String correo = jTextFieldCorreo.getText().trim();
+        String proposito = jTextFieldProposito_Prestamo.getText().trim();
+        
+        // 🟢 VARIABLE FALTANTE QUE CORRIGE EL ERROR DE FIRMA
+        String codigoSolicitante = jTextFieldCodigo_Solicitante.getText().trim(); 
+
+        // Fechas (asumiendo que son Date con hora)
+        Date fechaPrestamo = (Date) jSpinnerFecha_Prestamo.getValue();
+        Date fechaDevolucionEsperada = (Date) jSpinnerFecha_devolucion.getValue();
+
+        // 2. Obtener la lista de IDs de equipos de la jTableDetalle_Prestamo
+        // Esta función toma los IDs de la columna 1
+        List<Integer> idsEquipos = obtenerIDsEquiposDeDetalle();
+
+        // Validaciones básicas
+        if (idsEquipos.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Debe agregar al menos un equipo al detalle del préstamo.", "Error de Datos", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (nombreSolicitante.isEmpty() || correo.isEmpty() || proposito.isEmpty() || codigoSolicitante.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Todos los campos de Solicitante y Propósito son obligatorios.", "Error de Datos", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        // 3. Llamar al controlador (¡con los 9 argumentos!)
+        boolean exito = controladorPrincipal.registrarNuevoPrestamo(
+            idMonitor,
+            nombreSolicitante,
+            tipoUsuario,
+            correo,
+            proposito,
+            fechaPrestamo,
+            fechaDevolucionEsperada,
+            idsEquipos,
+            codigoSolicitante // 🟢 EL NOVENO ARGUMENTO
+        );
+
+        // 4. Mostrar resultado
+        if (exito) {
+            JOptionPane.showMessageDialog(this, "✅ Préstamo y detalles registrados con éxito.", "Registro Exitoso", JOptionPane.INFORMATION_MESSAGE);
+            limpiarCamposPrestamo(); // Asegúrate de tener este método para limpiar los campos
+            cargarEquiposDisponibles(); // Recarga la tabla de activos disponibles
+            // Limpia la tabla de detalle
+            ((DefaultTableModel) jTableDetalle_Prestamo.getModel()).setRowCount(0);
+        } else {
+            JOptionPane.showMessageDialog(this, "❌ Falló el registro del préstamo. Revise los logs del servidor para ver el error de la DB.", "Error de Registro", JOptionPane.ERROR_MESSAGE);
+        }
+
+    } catch (NumberFormatException e) {
+        logger.severe("Error al convertir ID de Monitor o Código: " + e.getMessage());
+        JOptionPane.showMessageDialog(this, "El ID Administrador/Monitor o Código de Solicitante no es un número válido.", "Error de Formato", JOptionPane.ERROR_MESSAGE);
+    } catch (Exception e) {
+        logger.severe("Error al registrar el préstamo: " + e.getMessage());
+        JOptionPane.showMessageDialog(this, "Ocurrió un error inesperado: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
+
+// Asegúrate de añadir este método auxiliar
+private void limpiarCamposPrestamo() {
+    jTextFieldCodigo_Solicitante.setText("");
+    jTextFieldNombre_solicitante.setText("");
+    jTextFieldCorreo.setText("");
+    jTextFieldProposito_Prestamo.setText("");
+    // Limpia la tabla de detalle
+    modeloDetallePrestamo.setRowCount(0);
+    }//GEN-LAST:event_jButtonGuardar_PrestamosActionPerformed
     private void limpiarCamposUsuario() {
     Id_cajadetexto.setText("");
     caja_texto_nombre.setText("");
@@ -2178,6 +2706,7 @@ public class Principal extends javax.swing.JFrame {
     private javax.swing.JPanel Devoluciones;
     private javax.swing.JLabel Etiqueta_de_Bienvenida;
     private javax.swing.JPanel Gestion_equipos;
+    private javax.swing.JTextField ID_Prestamo;
     private javax.swing.JTextField Id_cajadetexto;
     private javax.swing.JPanel Menu;
     private javax.swing.JPanel Prestamo;
@@ -2194,20 +2723,22 @@ public class Principal extends javax.swing.JFrame {
     private javax.swing.JPanel gestion_usuarios;
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton10;
-    private javax.swing.JButton jButton7;
-    private javax.swing.JButton jButton8;
-    private javax.swing.JButton jButton9;
+    private javax.swing.JButton jButtonAgregar_Equipo;
     private javax.swing.JButton jButtonBuscar;
     private javax.swing.JButton jButtonGestion_Equipos;
     private javax.swing.JButton jButtonGestion_Usuarios;
+    private javax.swing.JButton jButtonGuardar_Prestamos;
+    private javax.swing.JButton jButtonQuitar_Equipo;
+    private javax.swing.JButton jButtonRegistrar_Equipo;
     private javax.swing.JButton jButtonRegistro_devolucion;
     private javax.swing.JButton jButtonRegistro_prestamos;
     private javax.swing.JButton jButtonReporte_PDF;
     private javax.swing.JButton jButtonReporte_analisis;
     private javax.swing.JButton jButtonreporte_excel;
     private javax.swing.JComboBox<String> jComboBox1;
-    private javax.swing.JComboBox<String> jComboBox2;
     private javax.swing.JComboBox<String> jComboBoxEstado;
+    private javax.swing.JComboBox<String> jComboBoxTipo_de_usuario;
+    private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel10;
     private javax.swing.JLabel jLabel11;
     private javax.swing.JLabel jLabel12;
@@ -2229,6 +2760,7 @@ public class Principal extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel27;
     private javax.swing.JLabel jLabel28;
     private javax.swing.JLabel jLabel3;
+    private javax.swing.JLabel jLabel30;
     private javax.swing.JLabel jLabel4;
     private javax.swing.JLabel jLabel5;
     private javax.swing.JLabel jLabel6;
@@ -2246,6 +2778,7 @@ public class Principal extends javax.swing.JFrame {
     private javax.swing.JPanel jPanel15;
     private javax.swing.JPanel jPanel16;
     private javax.swing.JPanel jPanel17;
+    private javax.swing.JPanel jPanel18;
     private javax.swing.JPanel jPanel19;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPanel jPanel3;
@@ -2266,30 +2799,31 @@ public class Principal extends javax.swing.JFrame {
     private javax.swing.JScrollPane jScrollPane6;
     private javax.swing.JScrollPane jScrollPane7;
     private javax.swing.JScrollPane jScrollPane9;
-    private javax.swing.JSpinner jSpinner1;
-    private javax.swing.JSpinner jSpinner2;
+    private javax.swing.JSpinner jSpinnerFecha_Prestamo;
     private javax.swing.JSpinner jSpinnerFecha_de_adquisicion;
+    private javax.swing.JSpinner jSpinnerFecha_devolucion;
     private javax.swing.JTabbedPane jTabbedPane1;
-    private javax.swing.JTable jTable2;
-    private javax.swing.JTable jTable3;
     private javax.swing.JTable jTable4;
     private javax.swing.JTable jTable5;
     private javax.swing.JTable jTable6;
     private javax.swing.JTable jTable7;
     private javax.swing.JTable jTable8;
+    private javax.swing.JTable jTableDetalle_Prestamo;
+    private javax.swing.JTable jTablePrestamo;
     private javax.swing.JTable jTableUsuarios;
     private javax.swing.JTextArea jTextAreaObservaciones;
     private javax.swing.JTextField jTextField1;
     private javax.swing.JTextField jTextField3;
-    private javax.swing.JTextField jTextField5;
-    private javax.swing.JTextField jTextField6;
-    private javax.swing.JTextField jTextField7;
-    private javax.swing.JTextField jTextField8;
     private javax.swing.JTextField jTextFieldBuscar;
+    private javax.swing.JTextField jTextFieldCodigo_Solicitante;
+    private javax.swing.JTextField jTextFieldCorreo;
     private javax.swing.JTextField jTextFieldID;
+    private javax.swing.JTextField jTextFieldID_Administrador;
     private javax.swing.JTextField jTextFieldMarca;
     private javax.swing.JTextField jTextFieldModelo;
     private javax.swing.JTextField jTextFieldNombre;
+    private javax.swing.JTextField jTextFieldNombre_solicitante;
+    private javax.swing.JTextField jTextFieldProposito_Prestamo;
     private java.awt.Menu menu1;
     private java.awt.Menu menu2;
     private java.awt.MenuBar menuBar1;
